@@ -1,0 +1,11 @@
+{
+	"id": "file-name-length-limit",
+	"name": "File name length limit",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Puts a limit on file name length.",
+	"author": "Dmitrii Dmitriev",
+	"authorUrl": "https://github.com/DmitrievDmitriyA",
+	"fundingUrl": "",
+	"isDesktopOnly": false
+}
