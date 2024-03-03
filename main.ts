@@ -35,7 +35,7 @@ export default class FileNameLengthLimitPlugin extends Plugin {
 		// Add a command to check all files and generate a report
         this.addCommand({
             id: 'check-all-file-names',
-            name: 'Check All File Names',
+            name: 'Check all file names',
             callback: () => this.checkAllFileNames(),
         });
     }

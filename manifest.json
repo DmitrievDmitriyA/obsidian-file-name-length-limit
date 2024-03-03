@@ -1,11 +1,10 @@
 {
 	"id": "file-name-length-limit",
 	"name": "File name length limit",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.8",
 	"description": "Puts a limit on file name length.",
 	"author": "Dmitrii Dmitriev",
-	"authorUrl": "https://github.com/DmitrievDmitriyA",
-	"fundingUrl": "",
+	"authorUrl": "https://github.com/DmitrievDmitriyA/obsidian-file-name-length-limit",
 	"isDesktopOnly": false
 }
