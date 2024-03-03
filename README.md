@@ -1,4 +1,4 @@
-# FileName Length Limit Plugin for Obsidian
+# File Name Length Limit Plugin for Obsidian
 
 ## Description
 This plugin for Obsidian helps users manage the length of their file names. It provides a customizable limit to the length of file names and offers functionalities to notify users when a file exceeds this limit. It also includes a feature to generate a report of all files in the vault that exceed the specified length limit.
