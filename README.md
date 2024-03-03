@@ -16,7 +16,7 @@ After installation, you can set the desired maximum file name length in the plug
 You can also use the command "Check All File Names" to generate a report of all files with names exceeding the set limit. This report will be saved as `FilesWithTooLongNames.md` in your vault's root directory.
 
 ## Configuration
-Navigate to the plugin settings in Obsidian to configure the maximum file length. The default limit is set to 255 characters but can be adjusted to suit your needs.
+Navigate to the plugin settings in Obsidian to configure the maximum file length. The default limit is set to 144 characters but can be adjusted to suit your needs.
 
 ## Contributing
 Contributions to the FileName Length Limit plugin are welcome. If you have a suggestion, bug report, or feature request, please open an issue on the GitHub repository. If you're interested in contributing to the codebase, feel free to fork the repository and submit a pull request.

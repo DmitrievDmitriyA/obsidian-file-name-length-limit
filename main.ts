@@ -5,7 +5,7 @@ interface FileNameLengthLimitPluginSettings {
 }
 
 const DEFAULT_SETTINGS: FileNameLengthLimitPluginSettings = {
-    lengthLimit: 255
+    lengthLimit: 144
 }
 
 export default class FileNameLengthLimitPlugin extends Plugin {
