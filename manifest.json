@@ -1,7 +1,7 @@
 {
 	"id": "file-name-length-limit",
 	"name": "File name length limit",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"minAppVersion": "1.5.8",
 	"description": "Puts a limit on file name length.",
 	"author": "Dmitrii Dmitriev",
