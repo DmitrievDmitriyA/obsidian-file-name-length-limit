@@ -1,35 +1,68 @@
-# File Name Length Limit Plugin for Obsidian
+# File name length limit
 
-## Description
-This plugin helps you keep an Obsidian vault compatible across every device you sync it to — Windows, Linux, Android, and iOS. Instead of a single arbitrary limit, you pick the platforms you use and the plugin applies the **strictest combination** of their real filesystem rules: per-name length (in both characters and UTF-8 bytes), full path length, forbidden characters, reserved names, trailing dots/spaces, and case-only collisions. It warns you about the active file and can generate a full report of everything that would break on sync.
+An [Obsidian](https://obsidian.md) plugin that keeps your vault's file names compatible across every device you sync it to — **Windows, Linux, Android, and iOS**.
 
-### Why this matters
-The limits differ by platform and aren't just about character count:
+Sync a vault between a Windows PC, a Linux server, and a phone and sooner or later a file silently fails to sync, or the whole vault refuses to copy, because a name is too long or contains a character one of those systems rejects. This plugin catches those names *before* they break your sync.
 
-- **Per-name length**: 255 UTF-16 characters on Windows/iOS, but 255 **bytes** on Linux/Android — so a name with emoji or accented characters can pass on one system and fail on another.
-- **Full path length**: Windows caps the absolute path at 260 characters; the others are far more generous.
-- **Characters & names**: Windows and Android's shared storage reject `< > : " / \ | ? *`, trailing dots/spaces, and reserved names like `CON` or `NUL`. Case-insensitive systems (Windows, iOS) also collide on names that differ only by case.
+## How it works
 
-## Installation
-To install the plugin, follow these steps:
-1. Download the latest release from the GitHub repository.
-2. Extract the files and place them into your Obsidian vault's `.obsidian/plugins` directory.
-3. In Obsidian, open Settings → Community Plugins and disable Safe Mode.
-4. Find the FileName Length Limit plugin in the list of available plugins and enable it.
+You tell the plugin which platforms you sync to. It then applies the **strictest combination** of their real filesystem rules — not one arbitrary number — and flags any file that would break on at least one of them.
+
+It checks each file for:
+
+- **Name length** — every folder and file name against the 255-character-per-name limit, measured in **both** UTF-16 characters (how Windows/iOS count) **and** UTF-8 bytes (how Linux/Android count). A name with emoji or accented characters can be short in characters but too long in bytes.
+- **Full path length** — Windows caps the *absolute* path at 260 characters; the plugin accounts for where your vault lives on disk (see [Windows vault path length](#settings)).
+- **Forbidden characters** — `< > : " / \ | ? *` and control characters, which Windows and Android's shared storage reject.
+- **Reserved names** — Windows refuses names like `CON`, `NUL`, `COM1`, even with an extension.
+- **Trailing dots or spaces** — silently stripped or rejected on Windows/Android.
+- **Case-only collisions** — `Note.md` and `note.md` coexist on Linux but collide on Windows/iOS.
+
+Every issue in the report names exactly which platform(s) it affects.
+
+## Why per-platform, not a single limit
+
+The limits genuinely differ, and length is only part of the story:
+
+| Rule | Windows | Linux | Android | iOS |
+| --- | --- | --- | --- | --- |
+| Per-name limit | 255 chars | 255 **bytes** | 255 **bytes** | 255 chars |
+| Full path limit | 260 chars | 4096 | 4096 | large |
+| Forbidden chars | `< > : " / \ | ? *` | `/` | `< > : " / \ | ? *` | `: /` |
+| Reserved names | yes | no | no | no |
+| Case-sensitive | no | yes | yes | no |
+
+Selecting only the platforms you actually use avoids false alarms — e.g. if you never touch Windows, long paths and reserved names stop being flagged.
 
 ## Usage
-Open the plugin settings and enable every platform you sync this vault to. The plugin then notifies you whenever the currently active file would be incompatible with one of them.
 
-The status bar shows the active file's length; when the file is incompatible it turns into a highlighted warning. Clicking it generates the report described below.
+- **Automatic warning** — open or rename a file and, if it's incompatible with one of your selected platforms, you get a notice naming the platforms and the number of issues.
+- **Status bar** — shows the active file's length, and turns into a highlighted `⚠` warning when the file is incompatible. Click it to run a full scan.
+- **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing case-only collisions. Re-running overwrites the report.
 
-Run the command **"Check all file names"** to scan the whole vault and generate a report at `FileNameCompatibilityReport.md` in your vault root. Files are sorted by number of issues, each issue names the platform(s) it affects, and case-only collisions are listed separately. Running the command again overwrites the existing report.
+## Settings
 
-## Configuration
-Navigate to the plugin settings in Obsidian to configure:
+- **Target platforms** — toggle Windows, Linux, Android, and iOS. The strictest combination of the selected platforms is applied.
+- **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On desktop the plugin **auto-detects** this and shows the value; leave the field blank to use it. Enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
+- **Show status bar indicator** — toggle the status bar length/warning.
 
-- **Target platforms** — toggle Windows, Linux, Android, and iOS. The strictest combination of the selected platforms' rules is applied.
-- **Windows device-path budget** — because Windows measures the *absolute* path (which differs per device), reserve the length of the vault's location on your Windows machine (e.g. `C:\Users\me\Documents\MyVault\`). Only used when Windows is selected. Default is 90.
-- **Show status bar indicator** — toggle the status bar warning.
+## Installation
+
+### From Obsidian (once approved)
+
+1. Open **Settings → Community plugins** and turn off Restricted mode.
+2. Click **Browse**, search for **"File name length limit"**, and install.
+3. Enable the plugin.
+
+### Manual installation
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/DmitrievDmitriyA/obsidian-file-name-length-limit/releases/latest).
+2. Copy them into `<YourVault>/.obsidian/plugins/file-name-length-limit/`.
+3. Reload Obsidian and enable the plugin under **Settings → Community plugins**.
 
 ## Contributing
-Contributions to the FileName Length Limit plugin are welcome. If you have a suggestion, bug report, or feature request, please open an issue on the GitHub repository. If you're interested in contributing to the codebase, feel free to fork the repository and submit a pull request.
+
+Issues and pull requests are welcome. See [DEVELOPMENT.md](DEVELOPMENT.md) for how to build, run, and release the plugin locally.
+
+## License
+
+[MIT](LICENSE) © Dmitrii Dmitriev
