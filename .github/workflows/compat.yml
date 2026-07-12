@@ -1,0 +1,61 @@
+name: Obsidian API compatibility
+
+# GitHub cannot trigger on Obsidian's own releases, so this polls weekly
+# (and can be run on demand) to catch API changes that break the build.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Update to the latest Obsidian API
+        run: |
+          npm install --no-save obsidian@latest
+          echo "OBSIDIAN_TYPES_VERSION=$(node -p "require('obsidian/package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Type-check and build against the latest API
+        run: npm run build
+
+      - name: Open an issue if the build broke
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Build fails against the latest Obsidian API";
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "obsidian-compat",
+            });
+            if (existing.data.length > 0) {
+              return; // An open report already exists; don't pile on.
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              labels: ["obsidian-compat"],
+              body: [
+                `The scheduled compatibility build failed against \`obsidian@${process.env.OBSIDIAN_TYPES_VERSION || "latest"}\`.`,
+                "",
+                `See the run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join("\n"),
+            });
