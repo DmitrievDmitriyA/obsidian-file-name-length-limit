@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance to sign attestations.
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -24,20 +27,29 @@ jobs:
           npm install
           npm run build
 
-      - name: Create release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify the tag matches manifest.json
         run: |
           tag="${GITHUB_REF#refs/tags/}"
-
-          # The release tag must match the version in manifest.json.
           manifest_version=$(grep -oP '"version"\s*:\s*"\K[^"]+' manifest.json)
           if [ "$tag" != "$manifest_version" ]; then
             echo "Tag ($tag) does not match manifest.json version ($manifest_version)." >&2
             exit 1
           fi
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
           gh release create "$tag" \
             --title="$tag" \
-            --draft \
+            --generate-notes \
             main.js manifest.json styles.css

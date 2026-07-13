@@ -45,6 +45,10 @@ Selecting only the platforms you actually use avoids false alarms — e.g. if yo
 - **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On desktop the plugin **auto-detects** this and shows the value; leave the field blank to use it. Enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
 - **Show status bar indicator** — toggle the status bar length/warning.
 
+## Privacy
+
+The plugin works entirely offline and makes **no network requests** — no telemetry, no analytics, no external services. The "Check all file names" command reads the **names and paths** of files in your vault (never their contents) to check them against the selected platforms, and writes its findings only to `FileNameCompatibilityReport.md` inside your vault. On desktop it also reads your vault's own folder path to estimate the Windows path limit; that value never leaves your device.
+
 ## Installation
 
 ### From Obsidian (once approved)

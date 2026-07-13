@@ -104,25 +104,27 @@ export default class FileNameLengthLimitPlugin extends Plugin {
     }
 
     async checkAllFileNames() {
-        if (this.selectedTargets().length === 0) {
+        const targets = this.selectedTargets();
+        if (targets.length === 0) {
             new Notice('Select at least one target platform in the plugin settings.');
             return;
         }
 
-        const affected = this.app.vault.getFiles()
-            .map(file => ({ path: file.path, issues: this.issuesForPath(file.path) }))
+        const paths = this.app.vault.getFiles().map(file => file.path);
+
+        const affected = paths
+            .map(path => ({ path, issues: this.issuesForPath(path) }))
             .filter(entry => entry.issues.length > 0)
             .sort((a, b) => b.issues.length - a.issues.length);
 
-        const paths = this.app.vault.getFiles().map(file => file.path);
-        const collisions = findCaseCollisions(paths, this.selectedTargets());
+        const collisions = findCaseCollisions(paths, targets);
 
         if (affected.length === 0 && collisions.length === 0) {
             new Notice('All file names are compatible with the selected platforms.');
             return;
         }
 
-        const content = buildReport(this.selectedTargets(), affected, collisions);
+        const content = buildReport(targets, affected, collisions);
         const existing = this.app.vault.getAbstractFileByPath(REPORT_FILE_PATH);
         let reportFile: TFile;
         if (existing instanceof TFile) {
@@ -162,7 +164,7 @@ export default class FileNameLengthLimitPlugin extends Plugin {
             if (!this.statusBarEl) {
                 this.statusBarEl = this.addStatusBarItem();
                 this.statusBarEl.addClass('mod-clickable');
-                this.statusBarEl.addEventListener('click', () => this.checkAllFileNames());
+                this.statusBarEl.addEventListener('click', () => { void this.checkAllFileNames(); });
             }
             this.updateStatusBar();
         } else {
@@ -172,10 +174,10 @@ export default class FileNameLengthLimitPlugin extends Plugin {
     }
 
     async loadSettings() {
-        const stored = await this.loadData();
+        const stored = (await this.loadData()) as Partial<FileNameLengthLimitPluginSettings> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
         // Guard against a partially-stored targets object from older versions.
-        this.settings.targets = Object.assign({}, DEFAULT_SETTINGS.targets, this.settings.targets);
+        this.settings.targets = Object.assign({}, DEFAULT_SETTINGS.targets, stored?.targets);
     }
 
     async saveSettings() {

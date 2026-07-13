@@ -107,38 +107,35 @@ git push && git push --tags
 
 ### 3. Publish the release
 
-The GitHub Actions workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml) triggers on the pushed tag, builds the plugin, and creates a draft/published release with the three assets attached. Review it under the repo's **Releases** tab and publish if it's a draft.
+The GitHub Actions workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml) triggers on the pushed tag and:
+
+- verifies the tag equals `manifest.json`'s version (fails otherwise);
+- builds the plugin;
+- generates [build-provenance attestations](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds) for the assets, so users can verify they were built from this source;
+- publishes a release with auto-generated notes and `main.js` + `manifest.json` + `styles.css` attached.
+
+No manual publishing step is needed. Edit the release notes afterwards under the **Releases** tab if you want to expand them.
 
 To do it manually instead:
 
 ```bash
 npm run build
-gh release create <version> --title "<version>" main.js manifest.json styles.css
+gh release create <version> --title "<version>" --generate-notes main.js manifest.json styles.css
 ```
 
 ## Getting listed in Community plugins
 
-A plugin appears in Obsidian's in-app browser only after it's added to the official [`obsidianmd/obsidian-releases`](https://github.com/obsidianmd/obsidian-releases) list. Do this **once**:
+Submissions are made through the **Obsidian Community directory website** (the old pull request to `obsidian-releases` is no longer used). Do this **once**:
 
-1. Make sure the repo is public and has at least one release (see above), plus a root `README.md`, `LICENSE`, and `manifest.json`.
-2. Fork `obsidianmd/obsidian-releases` and add an entry to `community-plugins.json`:
+1. Make sure the repo is public and has at least one published release (see above), plus a root `README.md`, `LICENSE`, and `manifest.json`. The directory reads `manifest.json` from the **default branch**, so keep it committed there.
+2. Go to [community.obsidian.md](https://community.obsidian.md), sign in with your Obsidian account, and link your GitHub account.
+3. **Plugins → New plugin**, enter the repository URL (`https://github.com/DmitrievDmitriyA/obsidian-file-name-length-limit`), agree to the developer policies, and submit.
 
-   ```json
-   {
-     "id": "file-name-length-limit",
-     "name": "File name length limit",
-     "author": "Dmitrii Dmitriev",
-     "description": "Keeps file names compatible across Windows, Linux, Android, and iOS.",
-     "repo": "DmitrievDmitriyA/obsidian-file-name-length-limit"
-   }
-   ```
-
-3. Open a pull request. An automated bot checks your repo against the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines); a maintainer then reviews it. Address any feedback on this repo and push a new release if needed.
-
-Once merged, users can find the plugin via **Settings → Community plugins → Browse**. Subsequent updates ship by simply publishing a new GitHub release — no further PR to `obsidian-releases` is required.
+The directory runs automated checks and shows inline guidance. To fix a flagged item, change the repo, **publish a new release with a bumped version**, and re-run the check — there are no pull requests or issues to manage. Once approved, users find the plugin via **Settings → Community plugins → Browse**, and future updates ship by simply publishing a new GitHub release.
 
 ## Useful references
 
 - [Build a plugin](https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin)
 - [Submit your plugin](https://docs.obsidian.md/Plugins/Releasing/Submit+your+plugin)
+- [Developer policies](https://docs.obsidian.md/Developer+policies)
 - [Plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines)

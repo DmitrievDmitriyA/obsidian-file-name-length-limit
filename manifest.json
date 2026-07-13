@@ -1,10 +1,10 @@
 {
 	"id": "file-name-length-limit",
 	"name": "File name length limit",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"minAppVersion": "1.5.8",
 	"description": "Keeps file names compatible across Windows, Linux, Android, and iOS.",
 	"author": "Dmitrii Dmitriev",
-	"authorUrl": "https://github.com/DmitrievDmitriyA/obsidian-file-name-length-limit",
+	"authorUrl": "https://github.com/DmitrievDmitriyA",
 	"isDesktopOnly": false
 }
