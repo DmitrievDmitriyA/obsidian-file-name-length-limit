@@ -6,7 +6,9 @@ This document is for maintaining the plugin. For what the plugin does, see the [
 
 | File | Purpose |
 | --- | --- |
-| `main.ts` | All plugin source (logic, settings tab). |
+| `analyzer.ts` | Pure compatibility rules (name/byte length, forbidden chars, reserved names, path budget, collisions). **No `obsidian` import** — this is what the unit tests exercise. |
+| `analyzer.test.ts` | Vitest unit tests for `analyzer.ts`. |
+| `main.ts` | Obsidian glue: plugin lifecycle, settings tab, status bar, and vault I/O. Delegates all rules to `analyzer.ts`. |
 | `styles.css` | Styles bundled with the plugin (e.g. the status-bar warning). |
 | `manifest.json` | Plugin metadata Obsidian reads (`id`, `version`, `minAppVersion`, …). |
 | `versions.json` | Maps each plugin version to the minimum Obsidian version. |
@@ -64,6 +66,24 @@ npm run build
 ```
 
 This runs `tsc -noEmit -skipLibCheck` (type-check) followed by a production esbuild bundle. CI and releases use the same command, so a clean `npm run build` is the bar for merging.
+
+## Test
+
+The compatibility rules live in `analyzer.ts` with no `obsidian` dependency, so they run in plain Node:
+
+```bash
+npm test          # run once (used by CI)
+npm run test:watch # re-run on change while developing
+```
+
+Add a case to `analyzer.test.ts` whenever you change a platform rule. Keep new rule logic in `analyzer.ts` (testable) rather than `main.ts` (needs Obsidian).
+
+## Continuous integration
+
+Two GitHub Actions workflows run automatically:
+
+- [`ci.yml`](.github/workflows/ci.yml) — on every push to `main` and every pull request: type-check, build, and test. This is the gate for merging.
+- [`compat.yml`](.github/workflows/compat.yml) — weekly (and on demand): rebuilds against `obsidian@latest` to catch upstream API changes, opening an issue if the build breaks. Note that scheduled workflows only run from the default branch and GitHub disables them after 60 days of repo inactivity.
 
 ## Release
 
