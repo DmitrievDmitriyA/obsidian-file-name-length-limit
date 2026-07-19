@@ -97,10 +97,13 @@ export class PluginSettingTab {
 }
 
 export class Setting {
+    settingEl = { addClass() {}, removeClass() {}, toggleClass() {} };
     constructor(_el: unknown) {}
     setName() { return this; }
     setDesc() { return this; }
     setHeading() { return this; }
+    setClass() { return this; }
+    setDisabled() { return this; }
     setPlaceholder() { return this; }
     addText() { return this; }
     addToggle() { return this; }

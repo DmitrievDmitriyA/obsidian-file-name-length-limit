@@ -9,3 +9,13 @@ available in the app when your plugin is enabled.
     color: var(--text-error);
     font-weight: var(--font-bold);
 }
+
+/* Dependent option rendered under its parent toggle. */
+.fnll-sub-setting {
+    margin-left: 24px;
+}
+
+/* Dimmed when the parent toggle is off. */
+.fnll-sub-setting.fnll-disabled {
+    opacity: 0.5;
+}

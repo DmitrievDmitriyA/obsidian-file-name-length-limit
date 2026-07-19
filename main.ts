@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS: FileNameLengthLimitPluginSettings = {
     targets: { windows: true, linux: true, android: true, ios: true },
     windowsPathBudgetOverride: 0,
     showStatusBar: true,
-    statusBarFormat: 'length',
+    statusBarFormat: 'ratio',
 };
 
 export default class FileNameLengthLimitPlugin extends Plugin {
@@ -276,18 +276,22 @@ class FileNameLengthLimitSettingTab extends PluginSettingTab {
                 .onChange(async (value) => {
                     this.plugin.settings.showStatusBar = value;
                     await this.plugin.saveSettings();
+                    this.display();
                 }));
 
-        new Setting(containerEl)
+        const formatSetting = new Setting(containerEl)
             .setName('Status bar format')
             .setDesc('Show just the current length, or the length next to the strictest path limit of the selected platforms (e.g. "104 / 246").')
+            .setClass('fnll-sub-setting')
             .addDropdown(dropdown => dropdown
-                .addOption('length', 'Current length only')
                 .addOption('ratio', 'Length / limit')
+                .addOption('length', 'Current length only')
                 .setValue(this.plugin.settings.statusBarFormat)
                 .onChange(async (value) => {
                     this.plugin.settings.statusBarFormat = value as StatusBarFormat;
                     await this.plugin.saveSettings();
                 }));
+        formatSetting.setDisabled(!this.plugin.settings.showStatusBar);
+        formatSetting.settingEl.toggleClass('fnll-disabled', !this.plugin.settings.showStatusBar);
     }
 }

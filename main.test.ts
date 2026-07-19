@@ -64,6 +64,7 @@ describe('loadSettings', () => {
         expect(plugin.settings.targets).toEqual({ windows: true, linux: true, android: true, ios: true });
         expect(plugin.settings.windowsPathBudgetOverride).toBe(0);
         expect(plugin.settings.showStatusBar).toBe(true);
+        expect(plugin.settings.statusBarFormat).toBe('ratio');
     });
 
     it('merges a partially-stored targets object (older-version data)', async () => {
@@ -152,18 +153,18 @@ describe('status bar', () => {
         return (plugin.statusBarEl as unknown as { text: string }).text;
     }
 
-    it('shows just the length by default', async () => {
-        const { plugin } = makePlugin({ activeFile: 'note.md' });
-        await plugin.loadSettings();
-        expect(statusText(plugin)).toBe('File name length: 7');
-    });
-
-    it('shows length / strictest limit in ratio format', async () => {
+    it('shows length / strictest limit by default', async () => {
         // Budget = len('C:/Base/Vault') + 1 = 14; strictest = min(260-14, 4096, 4096, 1024) = 246.
         const { plugin } = makePlugin({ activeFile: 'note.md', adapter: new FileSystemAdapter('C:/Base/Vault') });
         await plugin.loadSettings();
-        plugin.settings.statusBarFormat = 'ratio';
         expect(statusText(plugin)).toBe('File name length: 7 / 246');
+    });
+
+    it('shows just the length in length-only format', async () => {
+        const { plugin } = makePlugin({ activeFile: 'note.md' });
+        await plugin.loadSettings();
+        plugin.settings.statusBarFormat = 'length';
+        expect(statusText(plugin)).toBe('File name length: 7');
     });
 
     it('keeps the warning prefix for incompatible files', async () => {
