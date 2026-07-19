@@ -10,12 +10,12 @@ You tell the plugin which platforms you sync to. It then applies the **strictest
 
 It checks each file for:
 
-- **Name length** — every folder and file name against the 255-character-per-name limit, measured in **both** UTF-16 characters (how Windows/iOS count) **and** UTF-8 bytes (how Linux/Android count). A name with emoji or accented characters can be short in characters but too long in bytes.
+- **Name length** — every folder and file name against the 255-per-name limit, measured the way each platform actually counts: UTF-16 units (Windows), Unicode code points (iOS), and UTF-8 bytes (Linux, Android). A name with emoji or accented characters can be short in characters but too long in bytes.
 - **Full path length** — Windows caps the *absolute* path at 260 characters; the plugin accounts for where your vault lives on disk (see [Windows vault path length](#settings)).
-- **Forbidden characters** — `< > : " / \ | ? *` and control characters, which Windows and Android's shared storage reject.
+- **Forbidden characters** — `< > : " / \ | ? *` and control characters, which Windows and Android's shared storage reject (Android also rejects the DEL character).
 - **Reserved names** — Windows refuses names like `CON`, `NUL`, `COM1`, even with an extension.
 - **Trailing dots or spaces** — silently stripped or rejected on Windows/Android.
-- **Case-only collisions** — `Note.md` and `note.md` coexist on Linux but collide on Windows/iOS.
+- **Colliding names** — `Note.md` and `note.md` coexist on Linux but are the same file on Windows, Android shared storage, and iOS. On iOS, two visually identical names that differ only in Unicode normalization (e.g. `é` typed as one code point vs. `e` + combining accent) also collide.
 
 Every issue in the report names exactly which platform(s) it affects.
 
@@ -25,11 +25,12 @@ The limits genuinely differ, and length is only part of the story:
 
 | Rule | Windows | Linux | Android | iOS |
 | --- | --- | --- | --- | --- |
-| Per-name limit | 255 chars | 255 **bytes** | 255 **bytes** | 255 chars |
-| Full path limit | 260 chars | 4096 | 4096 | large |
-| Forbidden chars | `< > : " / \ | ? *` | `/` | `< > : " / \ | ? *` | `: /` |
+| Per-name limit | 255 UTF-16 units | 255 **bytes** | 255 **bytes** | 255 code points |
+| Full path limit | 260 chars | 4096 | 4096 | 1024 |
+| Forbidden chars | `< > : " / \ | ? *`, control | `/` | `< > : " / \ | ? *`, control, DEL | `: /`, control |
 | Reserved names | yes | no | no | no |
-| Case-sensitive | no | yes | yes | no |
+| Case-sensitive | no | yes | no (shared storage) | no |
+| Normalization-sensitive | yes | yes | yes | no (NFC/NFD collide) |
 
 Selecting only the platforms you actually use avoids false alarms — e.g. if you never touch Windows, long paths and reserved names stop being flagged.
 
@@ -37,7 +38,7 @@ Selecting only the platforms you actually use avoids false alarms — e.g. if yo
 
 - **Automatic warning** — open or rename a file and, if it's incompatible with one of your selected platforms, you get a notice naming the platforms and the number of issues.
 - **Status bar** — shows the active file's length, and turns into a highlighted `⚠` warning when the file is incompatible. Click it to run a full scan.
-- **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing case-only collisions. Re-running overwrites the report.
+- **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing colliding names (case or Unicode normalization). Re-running overwrites the report.
 
 ## Settings
 

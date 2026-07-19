@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     analyzePath,
     buildReport,
-    findCaseCollisions,
+    findNameCollisions,
     PlatformKey,
     utf8Bytes,
 } from './analyzer';
@@ -46,6 +46,13 @@ describe('analyzePath — name length', () => {
         expect(platformsFor(name, ALL, NO_BUDGET, /characters long/).sort()).toEqual(['ios', 'windows']);
         expect(platformsFor(name, ALL, NO_BUDGET, /bytes long/).sort()).toEqual(['android', 'linux']);
     });
+
+    it('counts code points on iOS: an emoji-heavy name over 255 UTF-16 units can still be valid there', () => {
+        // 130 emoji: 263 UTF-16 units (over Windows), 133 code points (fine on iOS), 523 bytes (over Linux/Android).
+        const name = '🎉'.repeat(130) + '.md';
+        expect(platformsFor(name, ALL, NO_BUDGET, /characters long/)).toEqual(['windows']);
+        expect(platformsFor(name, ALL, NO_BUDGET, /bytes long/).sort()).toEqual(['android', 'linux']);
+    });
 });
 
 describe('analyzePath — characters and names', () => {
@@ -69,6 +76,18 @@ describe('analyzePath — characters and names', () => {
     it('reports each forbidden character separately', () => {
         const issues = analyzePath('a<b>c.md', ALL, NO_BUDGET).filter(i => /forbidden character/.test(i.message));
         expect(issues).toHaveLength(2);
+    });
+
+    it('flags control characters on Windows/Android/iOS but not Linux (ext4 allows them)', () => {
+        const flagged = platformsFor('bell\x07.md', ALL, NO_BUDGET, /forbidden character/);
+        expect(flagged.sort()).toEqual(['android', 'ios', 'windows']);
+    });
+
+    it('flags DEL (0x7f) on Android only, shown as an escape', () => {
+        const issues = analyzePath('del\x7f.md', ALL, NO_BUDGET).filter(i => /forbidden character/.test(i.message));
+        expect(issues).toHaveLength(1);
+        expect(issues[0].platforms).toEqual(['android']);
+        expect(issues[0].message).toContain('\\x7f');
     });
 });
 
@@ -101,15 +120,28 @@ describe('analyzePath — target selection', () => {
     });
 });
 
-describe('findCaseCollisions', () => {
+describe('findNameCollisions', () => {
     it('detects case-only duplicates when a case-insensitive target is selected', () => {
-        const collisions = findCaseCollisions(['Note.md', 'note.md', 'other.md'], ['windows']);
+        const collisions = findNameCollisions(['Note.md', 'note.md', 'other.md'], ['windows']);
         expect(collisions).toHaveLength(1);
         expect(collisions[0].sort()).toEqual(['Note.md', 'note.md']);
     });
 
-    it('finds nothing when only case-sensitive targets are selected', () => {
-        expect(findCaseCollisions(['Note.md', 'note.md'], ['linux', 'android'])).toHaveLength(0);
+    it('detects case-only duplicates on Android (shared storage is case-insensitive)', () => {
+        expect(findNameCollisions(['Note.md', 'note.md'], ['android'])).toHaveLength(1);
+    });
+
+    it('finds nothing when only case- and normalization-sensitive targets are selected', () => {
+        expect(findNameCollisions(['Note.md', 'note.md'], ['linux'])).toHaveLength(0);
+    });
+
+    it('detects NFC/NFD normalization duplicates on iOS', () => {
+        const nfc = 'café.md'; // e-acute as a single code point
+        const nfd = 'café.md'; // e + combining acute accent
+        expect(findNameCollisions([nfc, nfd], ['ios'])).toHaveLength(1);
+        // Case-insensitive but normalization-sensitive targets do not collide these.
+        expect(findNameCollisions([nfc, nfd], ['android'])).toHaveLength(0);
+        expect(findNameCollisions([nfc, nfd], ['linux'])).toHaveLength(0);
     });
 });
 
@@ -123,7 +155,7 @@ describe('buildReport', () => {
         expect(report).toContain('Targets: Windows, Linux');
         expect(report).toContain('## [[a/b.md]] (1)');
         expect(report).toContain('- too long — Linux');
-        expect(report).toContain('## Case-only collisions');
+        expect(report).toContain('## Colliding names (differ only by case or Unicode normalization)');
         expect(report).toContain('`Note.md` vs `note.md`');
     });
 });

@@ -6,8 +6,10 @@ export type PlatformKey = 'windows' | 'linux' | 'android' | 'ios';
 
 export interface PlatformSpec {
     label: string;
-    /** Per-component cap in UTF-16 code units (how Windows/APFS count). */
+    /** Per-component cap in UTF-16 code units (how Windows/NTFS counts). */
     componentUnits: number;
+    /** Per-component cap in Unicode code points (how iOS/APFS counts). */
+    componentPoints: number;
     /** Per-component cap in UTF-8 bytes (how Linux/ext4 count). */
     componentBytes: number;
     /** Cap on the full absolute path, in UTF-16 units. */
@@ -20,6 +22,8 @@ export interface PlatformSpec {
     forbidTrailingDotSpace: boolean;
     reservedNames: boolean;
     caseInsensitive: boolean;
+    /** APFS treats NFC/NFD spellings of the same name as identical. */
+    normalizationInsensitive: boolean;
 }
 
 export interface Issue {
@@ -29,13 +33,19 @@ export interface Issue {
 
 const INF = Number.POSITIVE_INFINITY;
 
-// The character sets below reflect what sync targets actually reject in practice:
-// Android's shared storage (used by sync clients) inherits the FAT/Windows set,
-// while APFS mainly rejects the path separator and colon.
+// Sources for these rules:
+// - Windows: Microsoft file-naming documentation (NTFS counts UTF-16 units; MAX_PATH 260).
+// - Linux: ext4 NAME_MAX/PATH_MAX; the filesystem itself only rejects '/' and NUL.
+// - Android: shared storage (/storage/emulated/0) enforces the FAT character set,
+//   a 255-UTF-8-byte name cap (MediaProvider MAX_FILENAME_BYTES), rejects control
+//   chars and DEL, and is case-insensitive per AOSP's storage documentation.
+// - iOS: APFS names are UTF-8, capped at 255 *characters* (code points), and the
+//   filesystem is case- and normalization-insensitive.
 export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
     windows: {
         label: 'Windows',
         componentUnits: 255,
+        componentPoints: INF,
         componentBytes: INF,
         maxPathUnits: 260,
         usesPrefixBudget: true,
@@ -44,34 +54,40 @@ export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
         forbidTrailingDotSpace: true,
         reservedNames: true,
         caseInsensitive: true,
+        normalizationInsensitive: false,
     },
     linux: {
         label: 'Linux',
         componentUnits: INF,
+        componentPoints: INF,
         componentBytes: 255,
         maxPathUnits: 4096,
         usesPrefixBudget: false,
         forbidden: '/',
-        forbidControl: true,
+        forbidControl: false,
         forbidTrailingDotSpace: false,
         reservedNames: false,
         caseInsensitive: false,
+        normalizationInsensitive: false,
     },
     android: {
         label: 'Android',
         componentUnits: INF,
+        componentPoints: INF,
         componentBytes: 255,
         maxPathUnits: 4096,
         usesPrefixBudget: false,
-        forbidden: '<>:"/\\|?*',
+        forbidden: '<>:"/\\|?*\x7f',
         forbidControl: true,
         forbidTrailingDotSpace: true,
         reservedNames: false,
-        caseInsensitive: false,
+        caseInsensitive: true,
+        normalizationInsensitive: false,
     },
     ios: {
         label: 'iOS',
-        componentUnits: 255,
+        componentUnits: INF,
+        componentPoints: 255,
         componentBytes: INF,
         maxPathUnits: 1024,
         usesPrefixBudget: false,
@@ -80,6 +96,7 @@ export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
         forbidTrailingDotSpace: false,
         reservedNames: false,
         caseInsensitive: true,
+        normalizationInsensitive: true,
     },
 };
 
@@ -121,21 +138,34 @@ export function analyzePath(path: string, targets: PlatformKey[], windowsBudget:
 
     for (const component of components) {
         const units = component.length;
+        const points = [...component].length;
         const bytes = utf8Bytes(component);
 
-        const unitViolators = targets.filter(key => units > PLATFORMS[key].componentUnits);
-        if (unitViolators.length > 0) {
-            issues.push({
-                message: `"${component}" is ${units} characters long (max 255 per name)`,
-                platforms: unitViolators,
-            });
+        // Each platform counts name length in its own unit. Violations that end up
+        // with the same displayed count (e.g. ASCII: units === points) are merged.
+        const measures = [
+            { value: units, unit: 'characters', violators: targets.filter(key => units > PLATFORMS[key].componentUnits) },
+            { value: points, unit: 'characters', violators: targets.filter(key => points > PLATFORMS[key].componentPoints) },
+            { value: bytes, unit: 'bytes', violators: targets.filter(key => bytes > PLATFORMS[key].componentBytes) },
+        ];
+        const lengthGroups = new Map<string, { value: number; unit: string; platforms: PlatformKey[] }>();
+        for (const measure of measures) {
+            if (measure.violators.length === 0) {
+                continue;
+            }
+            const groupKey = `${measure.value} ${measure.unit}`;
+            const group = lengthGroups.get(groupKey) ?? { value: measure.value, unit: measure.unit, platforms: [] };
+            for (const platform of measure.violators) {
+                if (!group.platforms.includes(platform)) {
+                    group.platforms.push(platform);
+                }
+            }
+            lengthGroups.set(groupKey, group);
         }
-
-        const byteViolators = targets.filter(key => bytes > PLATFORMS[key].componentBytes);
-        if (byteViolators.length > 0) {
+        for (const group of lengthGroups.values()) {
             issues.push({
-                message: `"${component}" is ${bytes} bytes long (max 255 per name)`,
-                platforms: byteViolators,
+                message: `"${component}" is ${group.value} ${group.unit} long (max 255 per name)`,
+                platforms: group.platforms,
             });
         }
 
@@ -144,9 +174,11 @@ export function analyzePath(path: string, targets: PlatformKey[], windowsBudget:
         for (const key of targets) {
             const spec = PLATFORMS[key];
             for (const char of component) {
-                const isControl = spec.forbidControl && char.charCodeAt(0) < 32;
+                const code = char.charCodeAt(0);
+                const isControl = spec.forbidControl && code < 32;
                 if (spec.forbidden.includes(char) || isControl) {
-                    const shown = isControl ? `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}` : char;
+                    const printable = code >= 32 && code !== 0x7f;
+                    const shown = printable ? char : `\\x${code.toString(16).padStart(2, '0')}`;
                     const existing = forbiddenByChar.get(shown) ?? [];
                     if (!existing.includes(key)) {
                         existing.push(key);
@@ -198,15 +230,26 @@ export function analyzePath(path: string, targets: PlatformKey[], windowsBudget:
     return issues;
 }
 
-/** Detect paths that differ only by case, which collide on case-insensitive targets. */
-export function findCaseCollisions(paths: string[], targets: PlatformKey[]): string[][] {
+/**
+ * Detect paths the selected platforms would treat as the same file:
+ * names differing only by case (case-insensitive targets) and/or only by
+ * Unicode normalization, e.g. NFC vs NFD "é" (normalization-insensitive targets).
+ */
+export function findNameCollisions(paths: string[], targets: PlatformKey[]): string[][] {
     const caseInsensitive = targets.some(key => PLATFORMS[key].caseInsensitive);
-    if (!caseInsensitive) {
+    const normInsensitive = targets.some(key => PLATFORMS[key].normalizationInsensitive);
+    if (!caseInsensitive && !normInsensitive) {
         return [];
     }
     const buckets = new Map<string, string[]>();
     for (const path of paths) {
-        const key = path.toLowerCase();
+        let key = path;
+        if (normInsensitive) {
+            key = key.normalize('NFC');
+        }
+        if (caseInsensitive) {
+            key = key.toLowerCase();
+        }
         const bucket = buckets.get(key) ?? [];
         bucket.push(path);
         buckets.set(key, bucket);
@@ -236,7 +279,7 @@ export function buildReport(
     }
 
     if (collisions.length > 0) {
-        lines.push('## Case-only collisions');
+        lines.push('## Colliding names (differ only by case or Unicode normalization)');
         for (const group of collisions) {
             lines.push(`- ${group.map(p => `\`${p}\``).join(' vs ')}`);
         }

@@ -2,7 +2,7 @@ import { App, FileSystemAdapter, Notice, Plugin, PluginSettingTab, Setting, TAbs
 import {
     analyzePath,
     buildReport,
-    findCaseCollisions,
+    findNameCollisions,
     Issue,
     labelList,
     PLATFORM_ORDER,
@@ -117,7 +117,7 @@ export default class FileNameLengthLimitPlugin extends Plugin {
             .filter(entry => entry.issues.length > 0)
             .sort((a, b) => b.issues.length - a.issues.length);
 
-        const collisions = findCaseCollisions(paths, targets);
+        const collisions = findNameCollisions(paths, targets);
 
         if (affected.length === 0 && collisions.length === 0) {
             new Notice('All file names are compatible with the selected platforms.');
