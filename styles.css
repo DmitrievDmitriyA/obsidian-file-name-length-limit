@@ -20,7 +20,5 @@ available in the app when your plugin is enabled.
 .nav-file-title-content.fnll-title-over-limit,
 .nav-folder-title-content.fnll-title-over-limit {
     color: var(--text-error);
-    text-decoration-line: underline;
-    text-decoration-style: wavy;
-    text-decoration-color: var(--text-error);
+    text-decoration: underline wavy var(--text-error);
 }
