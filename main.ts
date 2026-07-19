@@ -331,11 +331,13 @@ export default class FileNameLengthLimitPlugin extends Plugin {
         }
         const path = previewPath ?? this.app.workspace.getActiveFile()?.path;
         if (path === undefined) {
-            this.statusBarEl.setText('File name length: 0');
+            // No note open — hide the item entirely instead of showing a meaningless 0.
+            this.statusBarEl.setText('');
+            this.statusBarEl.addClass('fnll-hidden');
             this.statusBarEl.removeClass('fnll-over-limit');
-            this.statusBarEl.setAttribute('aria-label', 'No active file');
             return;
         }
+        this.statusBarEl.removeClass('fnll-hidden');
         const issues = this.issuesForPath(path);
         const overLimit = issues.length > 0;
         const limit = this.effectivePathLimit();

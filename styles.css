@@ -10,6 +10,11 @@ available in the app when your plugin is enabled.
     font-weight: var(--font-bold);
 }
 
+/* Status bar item when no note is open. */
+.fnll-hidden {
+    display: none;
+}
+
 /* Dependent option rendered under its parent toggle. */
 .fnll-sub-setting {
     margin-left: 24px;

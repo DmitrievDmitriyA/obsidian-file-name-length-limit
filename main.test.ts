@@ -205,6 +205,15 @@ describe('status bar', () => {
         expect(statusText(plugin)).toBe('File name length: 7');
     });
 
+    it('hides the item when no note is open', async () => {
+        const { plugin } = makePlugin();
+        await plugin.loadSettings();
+        plugin.updateStatusBarVisibility();
+        const bar = plugin.statusBarEl as unknown as { text: string; classes: Set<string> };
+        expect(bar.classes.has('fnll-hidden')).toBe(true);
+        expect(bar.text).toBe('');
+    });
+
     it('keeps the warning prefix for incompatible files', async () => {
         const { plugin } = makePlugin({ activeFile: 'CON.md' });
         await plugin.loadSettings();
