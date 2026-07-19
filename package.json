@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-file-name-length-limit",
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"description": "Keeps file names compatible across Windows, Linux, Android, and iOS.",
 	"main": "main.js",
 	"scripts": {
