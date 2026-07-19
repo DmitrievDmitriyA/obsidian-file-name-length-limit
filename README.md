@@ -64,6 +64,21 @@ The plugin works entirely offline and makes **no network requests** — no telem
 2. Copy them into `<YourVault>/.obsidian/plugins/file-name-length-limit/`.
 3. Reload Obsidian and enable the plugin under **Settings → Community plugins**.
 
+## How the rules are tested
+
+The platform rules are not taken on faith — a CI suite **creates real edge-case files on real filesystems** and verifies the plugin's predictions against what each OS actually does:
+
+| Platform | How it's verified |
+| --- | --- |
+| **Windows** | Continuously in CI on NTFS (windows-latest) and on a physical Windows 11 machine. Win32-layer rules (reserved names, trailing dots/spaces, the 260-char path limit) are enforced above the filesystem by Explorer and most tools, and are deliberately flagged even where raw NTFS would accept. |
+| **Linux** | Continuously in CI on ext4 (ubuntu-latest). |
+| **iOS** | Approximated by macOS APFS in CI (same filesystem family). The 255-UTF-16-unit name limit was established *empirically* on real APFS — it contradicts some published documentation. |
+| **Android** | Not directly testable on CI runners; its shared-storage rules are taken from the Android platform source (MediaProvider) and AOSP documentation. The 255-byte name limits are covered by the Linux run. |
+
+Details, including known subtleties and how to run the suite yourself, are in [TESTING.md](TESTING.md). If a name behaves differently on your device than the plugin predicts, please open an issue with the exact name and platform — the test suite is built to absorb exactly that kind of report.
+
+Note: sync services (iCloud Drive, OneDrive, Dropbox, Syncthing, Obsidian Sync) can impose *additional* restrictions beyond the filesystem. Those are not yet modeled.
+
 ## Contributing
 
 Issues and pull requests are welcome. See [DEVELOPMENT.md](DEVELOPMENT.md) for how to build, run, and release the plugin locally.

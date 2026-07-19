@@ -2,12 +2,13 @@
 
 This plugin's correctness rests on claims about four different filesystems. This document explains how those claims are tested, why the tests are structured the way they are, and the pitfalls to know before touching them.
 
-## Two test layers
+## Three test layers
 
 | Layer | File | What it proves |
 | --- | --- | --- |
 | Unit tests | `analyzer.test.ts` | The analyzer implements the rules we encoded (length units, forbidden chars, reserved names, collisions). |
 | Ground-truth tests | `groundtruth.test.ts` | The rules we encoded match what the OS **actually does** — by really creating files and observing the result. |
+| Integration tests | `main.test.ts` | The Obsidian glue works: settings loading/migration, budget auto-detection, report creation/overwrite, notices. Runs against a mocked `obsidian` module (`obsidian-mock.ts`, wired via `vitest.config.ts`). |
 
 Both run with Vitest:
 
@@ -60,6 +61,15 @@ Don't retype the literals — an editor or IME will silently normalize them.
 **Android is only partially testable.** Its restrictions come from the MediaProvider/FUSE layer over shared storage, which hosted runners can't reproduce. The Linux run covers the shared 255-byte name limit; the character rules and case-insensitivity rest on the AOSP sources cited in the `PLATFORMS` table in `analyzer.ts`.
 
 **The APFS name-length unit was settled empirically.** Documentation claims APFS caps names at 255 UTF-8 *characters* (code points). The very first macOS ground-truth run disproved that: APFS **rejected** a 263-unit / 133-code-point / 523-byte emoji name while **accepting** a 204-unit / 404-byte accented name. The only simple measure consistent with both observations is **255 UTF-16 units** — so `PLATFORMS.ios` counts units, same as Windows, and the code-point measure was removed. If a future macOS run fails a length case, re-derive the unit from the observations before touching the rule.
+
+## Testing frontier (candidates, not built)
+
+Ideas evaluated but not implemented yet, roughly by effort:
+
+- **Android emulator job** (`workflow_dispatch`-only) — the one way to truly test the MediaProvider layer instead of relying on AOSP sources; slow (~10 min per run) and the flakiest of these options.
+- **exFAT loopback mount on the Linux runner** — mount an exFAT image and run the suite against it: real SD-card semantics for the FAT character set.
+- **Case-sensitive APFS sparse image** (`hdiutil`) on macOS — iOS's data volume is actually the case-*sensitive* APFS variant, while the macOS runner's default volume is case-insensitive; this would sharpen the iOS collision claims.
+- **Sync-service rule sets** (iCloud's leading-dot exclusion, OneDrive's extra reserved names, Dropbox/Obsidian Sync quirks) — arguably more valuable than any of the above for real users, but it's a feature (new platform toggles in `PLATFORMS`), not just tests.
 
 ## Adding a rule: the checklist
 

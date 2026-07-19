@@ -9,6 +9,7 @@ This document is for maintaining the plugin. For what the plugin does, see the [
 | `analyzer.ts` | Pure compatibility rules (name/byte length, forbidden chars, reserved names, path budget, collisions). **No `obsidian` import** — this is what the unit tests exercise. |
 | `analyzer.test.ts` | Vitest unit tests for `analyzer.ts`. |
 | `groundtruth.test.ts` | Tests the rules against the real filesystem by creating actual files. See [TESTING.md](TESTING.md). |
+| `main.test.ts` | Integration tests for the Obsidian glue, against `obsidian-mock.ts` (aliased in `vitest.config.ts`). |
 | `TESTING.md` | Test architecture, ground-truth design, and known filesystem subtleties. |
 | `main.ts` | Obsidian glue: plugin lifecycle, settings tab, status bar, and vault I/O. Delegates all rules to `analyzer.ts`. |
 | `styles.css` | Styles bundled with the plugin (e.g. the status-bar warning). |
