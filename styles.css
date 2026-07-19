@@ -15,20 +15,12 @@ available in the app when your plugin is enabled.
     display: none;
 }
 
-/* Dependent option rendered under its parent toggle. */
-.fnll-sub-setting {
-    margin-left: 24px;
-}
-
-/* Dimmed when the parent toggle is off. */
-.fnll-sub-setting.fnll-disabled {
-    opacity: 0.5;
-}
-
 /* Name-editing fields (inline note title, file explorer rename) while the typed name is incompatible. */
 .inline-title.fnll-title-over-limit,
 .nav-file-title-content.fnll-title-over-limit,
 .nav-folder-title-content.fnll-title-over-limit {
     color: var(--text-error);
-    text-decoration: underline wavy var(--text-error);
+    text-decoration-line: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--text-error);
 }

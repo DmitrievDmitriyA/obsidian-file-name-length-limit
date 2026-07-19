@@ -103,7 +103,12 @@ export class PluginSettingTab {
     }
 
     display() {}
+    update() {}
+    refreshDomState() {}
 }
+
+/** Type-only stand-in for the declarative settings API; tests inspect the returned objects directly. */
+export type SettingDefinitionItem = Record<string, unknown>;
 
 export class Setting {
     settingEl = { addClass() {}, removeClass() {}, toggleClass() {} };

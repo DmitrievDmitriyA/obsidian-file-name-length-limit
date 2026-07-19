@@ -4,8 +4,8 @@
 // and user-facing notices.
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import FileNameLengthLimitPlugin from './main';
-import { FileSystemAdapter, notices, Platform, TFile } from './obsidian-mock';
+import FileNameLengthLimitPlugin, { FileNameLengthLimitSettingTab } from './main';
+import { App, FileSystemAdapter, notices, Platform, TFile } from './obsidian-mock';
 
 interface TestVault {
     files: TFile[];
@@ -318,6 +318,55 @@ describe('previewExplorerRename', () => {
         plugin.previewExplorerRename(fakeTitleEl('pica') as unknown as HTMLElement, 'notes/pic.png');
         expect(bar.text).toBe(withExt);
         expect(bar.text).toContain('14');
+    });
+});
+
+describe('settings tab (declarative API)', () => {
+    async function makeTab(options: Parameters<typeof makePlugin>[0] = {}) {
+        const { plugin } = makePlugin(options);
+        await plugin.loadSettings();
+        return { plugin, tab: new FileNameLengthLimitSettingTab(new App() as never, plugin) };
+    }
+
+    it('maps dotted target keys to the targets record', async () => {
+        const { plugin, tab } = await makeTab();
+        expect(tab.getControlValue('targets.windows')).toBe(true);
+        await tab.setControlValue('targets.windows', false);
+        expect(plugin.settings.targets.windows).toBe(false);
+        expect(tab.getControlValue('targets.windows')).toBe(false);
+        // Persisted, not just mutated in memory.
+        const stored = await (plugin as unknown as { loadData(): Promise<{ targets: { windows: boolean } }> }).loadData();
+        expect(stored.targets.windows).toBe(false);
+    });
+
+    it('treats the budget override as empty when auto (0) and clears it on blank input', async () => {
+        const { plugin, tab } = await makeTab();
+        expect(tab.getControlValue('windowsPathBudgetOverride')).toBeUndefined();
+        await tab.setControlValue('windowsPathBudgetOverride', 120.7);
+        expect(plugin.settings.windowsPathBudgetOverride).toBe(120);
+        await tab.setControlValue('windowsPathBudgetOverride', null);
+        expect(plugin.settings.windowsPathBudgetOverride).toBe(0);
+    });
+
+    it('declares every control and disables the format dropdown with the status bar off', async () => {
+        const { plugin, tab } = await makeTab();
+        const flatten = (items: unknown[]): Record<string, unknown>[] =>
+            items.flatMap((item) => {
+                const record = item as { items?: unknown[] };
+                return record.items ? flatten(record.items) : [item as Record<string, unknown>];
+            });
+        const controls = flatten(tab.getSettingDefinitions() as unknown[])
+            .map(def => def.control as { key?: string; disabled?: () => boolean } | undefined)
+            .filter((control): control is { key: string; disabled?: () => boolean } => control?.key !== undefined);
+        expect(controls.map(c => c.key)).toEqual([
+            'targets.windows', 'targets.linux', 'targets.android', 'targets.ios',
+            'windowsPathBudgetOverride', 'showStatusBar', 'statusBarFormat',
+        ]);
+
+        const format = controls.find(c => c.key === 'statusBarFormat');
+        expect(format?.disabled?.()).toBe(false);
+        plugin.settings.showStatusBar = false;
+        expect(format?.disabled?.()).toBe(true);
     });
 });
 

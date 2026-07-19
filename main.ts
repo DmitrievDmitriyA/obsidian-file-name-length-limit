@@ -1,4 +1,4 @@
-import { App, FileSystemAdapter, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile } from 'obsidian';
+import { App, FileSystemAdapter, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, SettingDefinitionItem, TAbstractFile, TFile } from 'obsidian';
 import {
     analyzePath,
     buildReport,
@@ -385,7 +385,9 @@ export default class FileNameLengthLimitPlugin extends Plugin {
     }
 }
 
-class FileNameLengthLimitSettingTab extends PluginSettingTab {
+const TARGET_KEY_PREFIX = 'targets.';
+
+export class FileNameLengthLimitSettingTab extends PluginSettingTab {
     plugin: FileNameLengthLimitPlugin;
 
     constructor(app: App, plugin: FileNameLengthLimitPlugin) {
@@ -393,27 +395,7 @@ class FileNameLengthLimitSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    display(): void {
-        const { containerEl } = this;
-
-        containerEl.empty();
-
-        new Setting(containerEl)
-            .setName('Target platforms')
-            .setDesc('Select every system this vault syncs to. The strictest combination of limits and allowed characters is applied.')
-            .setHeading();
-
-        for (const key of PLATFORM_ORDER) {
-            new Setting(containerEl)
-                .setName(PLATFORMS[key].label)
-                .addToggle(toggle => toggle
-                    .setValue(this.plugin.settings.targets[key])
-                    .onChange(async (value) => {
-                        this.plugin.settings.targets[key] = value;
-                        await this.plugin.saveSettings();
-                    }));
-        }
-
+    getSettingDefinitions(): SettingDefinitionItem[] {
         const remembered = this.plugin.settings.detectedWindowsPathLength;
         const detected = this.plugin.detectVaultPathLength();
         const detectedNote = Platform.isWin && detected !== null
@@ -426,53 +408,103 @@ class FileNameLengthLimitSettingTab extends PluginSettingTab {
         const autoValue = Platform.isWin && detected !== null
             ? detected
             : remembered > 0 ? remembered : detected;
-        new Setting(containerEl)
-            .setName('Windows vault path length')
-            .setDesc(`Windows caps the full absolute path at 260 characters, including your vault's location (e.g. "C:\\Users\\me\\Documents\\MyVault\\"). ${detectedNote} Leave blank to use it, or enter a value to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.`)
-            .addText(text => text
-                .setPlaceholder(autoValue !== null ? `Auto: ${autoValue}` : String(FALLBACK_WINDOWS_BUDGET))
-                .setValue(this.plugin.settings.windowsPathBudgetOverride > 0
-                    ? this.plugin.settings.windowsPathBudgetOverride.toString()
-                    : '')
-                .onChange(async (value) => {
-                    const trimmed = value.trim();
-                    if (trimmed === '') {
-                        this.plugin.settings.windowsPathBudgetOverride = 0;
-                        await this.plugin.saveSettings();
-                        return;
-                    }
-                    const parsed = Number(trimmed);
-                    if (!Number.isFinite(parsed) || parsed < 0) {
-                        return;
-                    }
-                    this.plugin.settings.windowsPathBudgetOverride = Math.floor(parsed);
-                    await this.plugin.saveSettings();
-                }));
 
-        new Setting(containerEl)
-            .setName('Show status bar indicator')
-            .setDesc('Show the active file\'s length and a warning when it is incompatible.')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.showStatusBar)
-                .onChange(async (value) => {
-                    this.plugin.settings.showStatusBar = value;
-                    await this.plugin.saveSettings();
-                    this.display();
-                }));
+        return [
+            {
+                type: 'group',
+                heading: 'Target platforms',
+                items: [
+                    {
+                        name: 'Select every system this vault syncs to',
+                        desc: 'The strictest combination of limits and allowed characters is applied.',
+                        searchable: false,
+                    },
+                    ...PLATFORM_ORDER.map(key => ({
+                        name: PLATFORMS[key].label,
+                        control: {
+                            type: 'toggle' as const,
+                            key: `${TARGET_KEY_PREFIX}${key}`,
+                            defaultValue: DEFAULT_SETTINGS.targets[key],
+                        },
+                    })),
+                ],
+            },
+            {
+                name: 'Windows vault path length',
+                desc: `Windows caps the full absolute path at 260 characters, including your vault's location (e.g. "C:\\Users\\me\\Documents\\MyVault\\"). ${detectedNote} Leave blank to use it, or enter a value to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.`,
+                aliases: ['MAX_PATH', '260', 'path budget'],
+                control: {
+                    type: 'number',
+                    key: 'windowsPathBudgetOverride',
+                    placeholder: autoValue !== null ? `Auto: ${autoValue}` : String(FALLBACK_WINDOWS_BUDGET),
+                    min: 0,
+                    step: 1,
+                },
+            },
+            {
+                type: 'group',
+                heading: 'Status bar',
+                items: [
+                    {
+                        name: 'Show status bar indicator',
+                        desc: 'Show the active file\'s length and a warning when it is incompatible.',
+                        control: {
+                            type: 'toggle',
+                            key: 'showStatusBar',
+                            defaultValue: DEFAULT_SETTINGS.showStatusBar,
+                        },
+                    },
+                    {
+                        name: 'Status bar format',
+                        desc: 'Show just the current length, or the length next to the strictest path limit of the selected platforms (e.g. "104 / 246").',
+                        control: {
+                            type: 'dropdown',
+                            key: 'statusBarFormat',
+                            options: { ratio: 'Length / limit', length: 'Current length only' },
+                            defaultValue: DEFAULT_SETTINGS.statusBarFormat,
+                            disabled: () => !this.plugin.settings.showStatusBar,
+                        },
+                    },
+                ],
+            },
+        ];
+    }
 
-        const formatSetting = new Setting(containerEl)
-            .setName('Status bar format')
-            .setDesc('Show just the current length, or the length next to the strictest path limit of the selected platforms (e.g. "104 / 246").')
-            .setClass('fnll-sub-setting')
-            .addDropdown(dropdown => dropdown
-                .addOption('ratio', 'Length / limit')
-                .addOption('length', 'Current length only')
-                .setValue(this.plugin.settings.statusBarFormat)
-                .onChange(async (value) => {
-                    this.plugin.settings.statusBarFormat = value as StatusBarFormat;
-                    await this.plugin.saveSettings();
-                }));
-        formatSetting.setDisabled(!this.plugin.settings.showStatusBar);
-        formatSetting.settingEl.toggleClass('fnll-disabled', !this.plugin.settings.showStatusBar);
+    getControlValue(key: string): unknown {
+        const settings = this.plugin.settings;
+        if (key.startsWith(TARGET_KEY_PREFIX)) {
+            return settings.targets[key.slice(TARGET_KEY_PREFIX.length) as PlatformKey];
+        }
+        switch (key) {
+            case 'windowsPathBudgetOverride':
+                // 0 means auto-detect; show an empty field with the auto placeholder.
+                return settings.windowsPathBudgetOverride > 0 ? settings.windowsPathBudgetOverride : undefined;
+            case 'showStatusBar':
+                return settings.showStatusBar;
+            case 'statusBarFormat':
+                return settings.statusBarFormat;
+            default:
+                return undefined;
+        }
+    }
+
+    async setControlValue(key: string, value: unknown): Promise<void> {
+        const settings = this.plugin.settings;
+        if (key.startsWith(TARGET_KEY_PREFIX)) {
+            settings.targets[key.slice(TARGET_KEY_PREFIX.length) as PlatformKey] = Boolean(value);
+        } else if (key === 'windowsPathBudgetOverride') {
+            settings.windowsPathBudgetOverride = typeof value === 'number' && Number.isFinite(value) && value > 0
+                ? Math.floor(value)
+                : 0;
+        } else if (key === 'showStatusBar') {
+            settings.showStatusBar = Boolean(value);
+        } else if (key === 'statusBarFormat') {
+            settings.statusBarFormat = value === 'length' ? 'length' : 'ratio';
+        } else {
+            return;
+        }
+        await this.plugin.saveSettings();
+        // Re-evaluate the format dropdown's disabled predicate.
+        this.refreshDomState();
     }
 }
