@@ -2,7 +2,7 @@
 	"id": "file-name-length-limit",
 	"name": "File name length limit",
 	"version": "0.3.5",
-	"minAppVersion": "1.5.8",
+	"minAppVersion": "1.11.4",
 	"description": "Keeps file names compatible across Windows, Linux, Android, and iOS.",
 	"author": "Dmitrii Dmitriev",
 	"authorUrl": "https://github.com/DmitrievDmitriyA",
