@@ -108,6 +108,12 @@ describe('analyzePath — full path length', () => {
         expect(platformsFor(path, ['windows'], 30, /full path/)).toHaveLength(0);
         expect(platformsFor(path, ['windows'], 80, /full path/)).toEqual(['windows']);
     });
+
+    it('applies the device-root budget to Windows only', () => {
+        // Even an absurd budget must not push other platforms over their limits.
+        expect(platformsFor('a.md', ['linux', 'android', 'ios'], 5000, /full path/)).toHaveLength(0);
+        expect(platformsFor('a.md', ['windows'], 5000, /full path/)).toEqual(['windows']);
+    });
 });
 
 describe('analyzePath — target selection', () => {

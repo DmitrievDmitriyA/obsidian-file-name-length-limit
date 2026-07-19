@@ -1,0 +1,36 @@
+name: Bug report
+description: Something in the plugin misbehaves (settings, status bar, report, notices).
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin and Obsidian versions
+      placeholder: "plugin 0.2.3, Obsidian 1.6.x"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform you saw it on
+      options:
+        - Windows
+        - Linux
+        - Android
+        - iOS
+        - macOS
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Console errors (Ctrl/Cmd+Shift+I), screenshots, other plugins that might interact.

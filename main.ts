@@ -15,17 +15,22 @@ const REPORT_FILE_PATH = 'FileNameCompatibilityReport.md';
 // Used when the vault path can't be auto-detected (e.g. on mobile).
 const FALLBACK_WINDOWS_BUDGET = 90;
 
+type StatusBarFormat = 'length' | 'ratio';
+
 interface FileNameLengthLimitPluginSettings {
     targets: Record<PlatformKey, boolean>;
     /** Manual override for the device root path length. 0 means auto-detect. */
     windowsPathBudgetOverride: number;
     showStatusBar: boolean;
+    /** 'length' shows just the current length; 'ratio' shows length / strictest limit. */
+    statusBarFormat: StatusBarFormat;
 }
 
 const DEFAULT_SETTINGS: FileNameLengthLimitPluginSettings = {
     targets: { windows: true, linux: true, android: true, ios: true },
     windowsPathBudgetOverride: 0,
     showStatusBar: true,
+    statusBarFormat: 'length',
 };
 
 export default class FileNameLengthLimitPlugin extends Plugin {
@@ -86,6 +91,19 @@ export default class FileNameLengthLimitPlugin extends Plugin {
     /** Collect every cross-platform naming issue for a vault-relative path. */
     issuesForPath(path: string): Issue[] {
         return analyzePath(path, this.selectedTargets(), this.effectiveWindowsBudget());
+    }
+
+    /** The strictest allowed relative-path length across the selected platforms, or null when none are selected. */
+    effectivePathLimit(): number | null {
+        const targets = this.selectedTargets();
+        if (targets.length === 0) {
+            return null;
+        }
+        const budget = this.effectiveWindowsBudget();
+        return Math.min(...targets.map(key => {
+            const spec = PLATFORMS[key];
+            return spec.maxPathUnits - (spec.usesPrefixBudget ? budget : 0);
+        }));
     }
 
     notifyIfIncompatible(file: TFile | null) {
@@ -149,7 +167,11 @@ export default class FileNameLengthLimitPlugin extends Plugin {
         }
         const issues = this.issuesForPath(file.path);
         const overLimit = issues.length > 0;
-        this.statusBarEl.setText(overLimit ? `⚠ File name length: ${file.path.length}` : `File name length: ${file.path.length}`);
+        const limit = this.effectivePathLimit();
+        const shown = this.settings.statusBarFormat === 'ratio' && limit !== null
+            ? `${file.path.length} / ${limit}`
+            : `${file.path.length}`;
+        this.statusBarEl.setText(overLimit ? `⚠ File name length: ${shown}` : `File name length: ${shown}`);
         this.statusBarEl.toggleClass('fnll-over-limit', overLimit);
         this.statusBarEl.setAttribute(
             'aria-label',
@@ -253,6 +275,18 @@ class FileNameLengthLimitSettingTab extends PluginSettingTab {
                 .setValue(this.plugin.settings.showStatusBar)
                 .onChange(async (value) => {
                     this.plugin.settings.showStatusBar = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Status bar format')
+            .setDesc('Show just the current length, or the length next to the strictest path limit of the selected platforms (e.g. "104 / 246").')
+            .addDropdown(dropdown => dropdown
+                .addOption('length', 'Current length only')
+                .addOption('ratio', 'Length / limit')
+                .setValue(this.plugin.settings.statusBarFormat)
+                .onChange(async (value) => {
+                    this.plugin.settings.statusBarFormat = value as StatusBarFormat;
                     await this.plugin.saveSettings();
                 }));
     }

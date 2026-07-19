@@ -16,7 +16,7 @@ interface TestVault {
     modifyCalls: number;
 }
 
-function makePlugin(options: { files?: string[]; adapter?: unknown; stored?: unknown } = {}) {
+function makePlugin(options: { files?: string[]; adapter?: unknown; stored?: unknown; activeFile?: string } = {}) {
     const vaultState: TestVault = {
         files: (options.files ?? []).map(p => new TFile(p)),
         adapter: options.adapter ?? {},
@@ -44,7 +44,8 @@ function makePlugin(options: { files?: string[]; adapter?: unknown; stored?: unk
         },
     };
 
-    const workspace = { on() {}, getActiveFile: () => null };
+    const activeFile = options.activeFile ? new TFile(options.activeFile) : null;
+    const workspace = { on() {}, getActiveFile: () => activeFile };
     const plugin = new FileNameLengthLimitPlugin({ vault, workspace } as never, {} as never);
     if (options.stored !== undefined) {
         (plugin as unknown as { __setStoredData(d: unknown): void }).__setStoredData(options.stored);
@@ -142,6 +143,33 @@ describe('checkAllFileNames', () => {
         await plugin.checkAllFileNames();
         expect(vaultState.createCalls).toBe(0);
         expect(notices.some(n => /at least one target platform/.test(n))).toBe(true);
+    });
+});
+
+describe('status bar', () => {
+    function statusText(plugin: FileNameLengthLimitPlugin): string {
+        plugin.updateStatusBarVisibility();
+        return (plugin.statusBarEl as unknown as { text: string }).text;
+    }
+
+    it('shows just the length by default', async () => {
+        const { plugin } = makePlugin({ activeFile: 'note.md' });
+        await plugin.loadSettings();
+        expect(statusText(plugin)).toBe('File name length: 7');
+    });
+
+    it('shows length / strictest limit in ratio format', async () => {
+        // Budget = len('C:/Base/Vault') + 1 = 14; strictest = min(260-14, 4096, 4096, 1024) = 246.
+        const { plugin } = makePlugin({ activeFile: 'note.md', adapter: new FileSystemAdapter('C:/Base/Vault') });
+        await plugin.loadSettings();
+        plugin.settings.statusBarFormat = 'ratio';
+        expect(statusText(plugin)).toBe('File name length: 7 / 246');
+    });
+
+    it('keeps the warning prefix for incompatible files', async () => {
+        const { plugin } = makePlugin({ activeFile: 'CON.md' });
+        await plugin.loadSettings();
+        expect(statusText(plugin)).toContain('⚠');
     });
 });
 

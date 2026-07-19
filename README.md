@@ -4,6 +4,19 @@ An [Obsidian](https://obsidian.md) plugin that keeps your vault's file names com
 
 Sync a vault between a Windows PC, a Linux server, and a phone and sooner or later a file silently fails to sync, or the whole vault refuses to copy, because a name is too long or contains a character one of those systems rejects. This plugin catches those names *before* they break your sync.
 
+## Usage
+
+- **Automatic warning** — open or rename a file and, if it's incompatible with one of your selected platforms, you get a notice naming the platforms and the number of issues.
+- **Status bar** — shows the active file's length, and turns into a highlighted `⚠` warning when the file is incompatible. Click it to run a full scan.
+- **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing colliding names (case or Unicode normalization). Re-running overwrites the report.
+
+## Settings
+
+- **Target platforms** — toggle Windows, Linux, Android, and iOS. The strictest combination of the selected platforms is applied.
+- **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On desktop the plugin **auto-detects** this and shows the value; leave the field blank to use it. Enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
+- **Show status bar indicator** — toggle the status bar length/warning.
+- **Status bar format** — show just the current length, or the length next to the strictest path limit of your selected platforms (e.g. `104 / 246`).
+
 ## How it works
 
 You tell the plugin which platforms you sync to. It then applies the **strictest combination** of their real filesystem rules — not one arbitrary number — and flags any file that would break on at least one of them.
@@ -33,18 +46,6 @@ The limits genuinely differ, and length is only part of the story:
 | Normalization-sensitive | yes | yes | yes | no (NFC/NFD collide) |
 
 Selecting only the platforms you actually use avoids false alarms — e.g. if you never touch Windows, long paths and reserved names stop being flagged.
-
-## Usage
-
-- **Automatic warning** — open or rename a file and, if it's incompatible with one of your selected platforms, you get a notice naming the platforms and the number of issues.
-- **Status bar** — shows the active file's length, and turns into a highlighted `⚠` warning when the file is incompatible. Click it to run a full scan.
-- **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing colliding names (case or Unicode normalization). Re-running overwrites the report.
-
-## Settings
-
-- **Target platforms** — toggle Windows, Linux, Android, and iOS. The strictest combination of the selected platforms is applied.
-- **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On desktop the plugin **auto-detects** this and shows the value; leave the field blank to use it. Enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
-- **Show status bar indicator** — toggle the status bar length/warning.
 
 ## Privacy
 

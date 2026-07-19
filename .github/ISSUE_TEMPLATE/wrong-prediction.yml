@@ -1,0 +1,51 @@
+name: Wrong prediction (false positive / false negative)
+description: A file name behaves differently on your device than the plugin predicts.
+title: "[prediction] "
+labels: ["wrong-prediction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks — these reports directly improve the plugin's rules. Each confirmed case becomes a ground-truth test.
+  - type: input
+    id: file-name
+    attributes:
+      label: Exact file name (or path)
+      description: Paste the name exactly, including any special characters. If it contains invisible characters, mention that.
+      placeholder: "Projects/12:00 meeting.md"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform where the behavior differs
+      options:
+        - Windows
+        - Linux
+        - Android
+        - iOS
+        - macOS
+    validations:
+      required: true
+  - type: dropdown
+    id: direction
+    attributes:
+      label: What kind of mismatch?
+      options:
+        - "False negative: the plugin says it's fine, but the file breaks on my device"
+        - "False positive: the plugin flags it, but the file works fine everywhere I sync"
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What actually happens
+      description: E.g. sync fails, file invisible, rename rejected, two files merged into one.
+    validations:
+      required: true
+  - type: input
+    id: storage
+    attributes:
+      label: Where the vault lives on that device
+      description: Helps distinguish filesystem rules from sync-service rules.
+      placeholder: "e.g. C:\\Users\\me\\Documents\\Vault, /storage/emulated/0/Vault, iCloud Drive, OneDrive folder"
