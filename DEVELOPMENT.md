@@ -8,6 +8,8 @@ This document is for maintaining the plugin. For what the plugin does, see the [
 | --- | --- |
 | `analyzer.ts` | Pure compatibility rules (name/byte length, forbidden chars, reserved names, path budget, collisions). **No `obsidian` import** — this is what the unit tests exercise. |
 | `analyzer.test.ts` | Vitest unit tests for `analyzer.ts`. |
+| `groundtruth.test.ts` | Tests the rules against the real filesystem by creating actual files. See [TESTING.md](TESTING.md). |
+| `TESTING.md` | Test architecture, ground-truth design, and known filesystem subtleties. |
 | `main.ts` | Obsidian glue: plugin lifecycle, settings tab, status bar, and vault I/O. Delegates all rules to `analyzer.ts`. |
 | `styles.css` | Styles bundled with the plugin (e.g. the status-bar warning). |
 | `manifest.json` | Plugin metadata Obsidian reads (`id`, `version`, `minAppVersion`, …). |
@@ -78,11 +80,14 @@ npm run test:watch # re-run on change while developing
 
 Add a case to `analyzer.test.ts` whenever you change a platform rule. Keep new rule logic in `analyzer.ts` (testable) rather than `main.ts` (needs Obsidian).
 
+There is also a **ground-truth suite** (`groundtruth.test.ts`) that verifies the platform rules against the real filesystem by actually creating edge-case files, run in CI on NTFS/ext4/APFS. Its design, known subtleties (Win32 `\\?\` bypass, NFC/NFD literals, MAX_PATH), and the checklist for adding a rule are documented in [TESTING.md](TESTING.md) — read that before changing `analyzer.ts` or interpreting a surprising ground-truth failure.
+
 ## Continuous integration
 
-Two GitHub Actions workflows run automatically:
+Three GitHub Actions workflows run automatically:
 
 - [`ci.yml`](.github/workflows/ci.yml) — on every push to `main` and every pull request: type-check, build, and test. This is the gate for merging.
+- [`ground-truth.yml`](.github/workflows/ground-truth.yml) — on rule changes and monthly: validates the platform rules against real NTFS/ext4/APFS runners (see above).
 - [`compat.yml`](.github/workflows/compat.yml) — weekly (and on demand): rebuilds against `obsidian@latest` to catch upstream API changes, opening an issue if the build breaks. Note that scheduled workflows only run from the default branch and GitHub disables them after 60 days of repo inactivity.
 
 ## Release

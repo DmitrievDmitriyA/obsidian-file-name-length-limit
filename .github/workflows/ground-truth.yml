@@ -1,0 +1,46 @@
+name: Ground truth (real filesystems)
+
+# Runs the ground-truth suite on real NTFS, ext4, and APFS runners: it actually
+# creates edge-case file names and asserts the analyzer's rules match what each
+# OS does. macOS stands in for iOS (same filesystem family). Android's
+# MediaProvider layer is not reproducible on hosted runners; its byte limits are
+# covered by the Linux run.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "analyzer.ts"
+      - "groundtruth.test.ts"
+      - ".github/workflows/ground-truth.yml"
+  pull_request:
+    paths:
+      - "analyzer.ts"
+      - "groundtruth.test.ts"
+      - ".github/workflows/ground-truth.yml"
+  schedule:
+    - cron: "0 6 1 * *" # monthly: catches OS-side behavior drift on runner images
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ground-truth:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.x"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ground-truth tests against this OS
+        run: npx vitest run groundtruth.test.ts
