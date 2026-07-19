@@ -10,7 +10,7 @@ You tell the plugin which platforms you sync to. It then applies the **strictest
 
 It checks each file for:
 
-- **Name length** — every folder and file name against the 255-per-name limit, measured the way each platform actually counts: UTF-16 units (Windows), Unicode code points (iOS), and UTF-8 bytes (Linux, Android). A name with emoji or accented characters can be short in characters but too long in bytes.
+- **Name length** — every folder and file name against the 255-per-name limit, measured the way each platform actually counts: UTF-16 units (Windows, iOS) and UTF-8 bytes (Linux, Android). A name with emoji or accented characters can be short in characters but too long in bytes.
 - **Full path length** — Windows caps the *absolute* path at 260 characters; the plugin accounts for where your vault lives on disk (see [Windows vault path length](#settings)).
 - **Forbidden characters** — `< > : " / \ | ? *` and control characters, which Windows and Android's shared storage reject (Android also rejects the DEL character).
 - **Reserved names** — Windows refuses names like `CON`, `NUL`, `COM1`, even with an extension.
@@ -25,7 +25,7 @@ The limits genuinely differ, and length is only part of the story:
 
 | Rule | Windows | Linux | Android | iOS |
 | --- | --- | --- | --- | --- |
-| Per-name limit | 255 UTF-16 units | 255 **bytes** | 255 **bytes** | 255 code points |
+| Per-name limit | 255 UTF-16 units | 255 **bytes** | 255 **bytes** | 255 UTF-16 units |
 | Full path limit | 260 chars | 4096 | 4096 | 1024 |
 | Forbidden chars | `< > : " / \ | ? *`, control | `/` | `< > : " / \ | ? *`, control, DEL | `: /`, control |
 | Reserved names | yes | no | no | no |

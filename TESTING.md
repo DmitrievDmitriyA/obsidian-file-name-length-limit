@@ -59,7 +59,7 @@ Don't retype the literals — an editor or IME will silently normalize them.
 
 **Android is only partially testable.** Its restrictions come from the MediaProvider/FUSE layer over shared storage, which hosted runners can't reproduce. The Linux run covers the shared 255-byte name limit; the character rules and case-insensitivity rest on the AOSP sources cited in the `PLATFORMS` table in `analyzer.ts`.
 
-**The macOS job doubles as an experiment.** The iOS rule counts 255 *code points* per name (per APFS documentation). The emoji test case (263 UTF-16 units / 133 code points) is accepted by APFS if that's right. If the macOS job ever fails on it, the documentation was wrong and the iOS limit should likely become UTF-8 bytes — update `PLATFORMS.ios` accordingly.
+**The APFS name-length unit was settled empirically.** Documentation claims APFS caps names at 255 UTF-8 *characters* (code points). The very first macOS ground-truth run disproved that: APFS **rejected** a 263-unit / 133-code-point / 523-byte emoji name while **accepting** a 204-unit / 404-byte accented name. The only simple measure consistent with both observations is **255 UTF-16 units** — so `PLATFORMS.ios` counts units, same as Windows, and the code-point measure was removed. If a future macOS run fails a length case, re-derive the unit from the observations before touching the rule.
 
 ## Adding a rule: the checklist
 

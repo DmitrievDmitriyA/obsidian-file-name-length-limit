@@ -6,10 +6,8 @@ export type PlatformKey = 'windows' | 'linux' | 'android' | 'ios';
 
 export interface PlatformSpec {
     label: string;
-    /** Per-component cap in UTF-16 code units (how Windows/NTFS counts). */
+    /** Per-component cap in UTF-16 code units (how Windows/NTFS and APFS count). */
     componentUnits: number;
-    /** Per-component cap in Unicode code points (how iOS/APFS counts). */
-    componentPoints: number;
     /** Per-component cap in UTF-8 bytes (how Linux/ext4 count). */
     componentBytes: number;
     /** Cap on the full absolute path, in UTF-16 units. */
@@ -39,13 +37,15 @@ const INF = Number.POSITIVE_INFINITY;
 // - Android: shared storage (/storage/emulated/0) enforces the FAT character set,
 //   a 255-UTF-8-byte name cap (MediaProvider MAX_FILENAME_BYTES), rejects control
 //   chars and DEL, and is case-insensitive per AOSP's storage documentation.
-// - iOS: APFS names are UTF-8, capped at 255 *characters* (code points), and the
-//   filesystem is case- and normalization-insensitive.
+// - iOS: measured empirically on real APFS (ground-truth CI on macOS): a name of
+//   263 UTF-16 units / 133 code points / 523 bytes is REJECTED while 204 units /
+//   404 bytes is ACCEPTED — so the enforced limit matches 255 UTF-16 units, not
+//   code points (as some documentation claims) and not UTF-8 bytes. APFS is
+//   case- and normalization-insensitive.
 export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
     windows: {
         label: 'Windows',
         componentUnits: 255,
-        componentPoints: INF,
         componentBytes: INF,
         maxPathUnits: 260,
         usesPrefixBudget: true,
@@ -59,7 +59,6 @@ export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
     linux: {
         label: 'Linux',
         componentUnits: INF,
-        componentPoints: INF,
         componentBytes: 255,
         maxPathUnits: 4096,
         usesPrefixBudget: false,
@@ -73,7 +72,6 @@ export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
     android: {
         label: 'Android',
         componentUnits: INF,
-        componentPoints: INF,
         componentBytes: 255,
         maxPathUnits: 4096,
         usesPrefixBudget: false,
@@ -86,8 +84,7 @@ export const PLATFORMS: Record<PlatformKey, PlatformSpec> = {
     },
     ios: {
         label: 'iOS',
-        componentUnits: INF,
-        componentPoints: 255,
+        componentUnits: 255,
         componentBytes: INF,
         maxPathUnits: 1024,
         usesPrefixBudget: false,
@@ -138,14 +135,12 @@ export function analyzePath(path: string, targets: PlatformKey[], windowsBudget:
 
     for (const component of components) {
         const units = component.length;
-        const points = [...component].length;
         const bytes = utf8Bytes(component);
 
         // Each platform counts name length in its own unit. Violations that end up
-        // with the same displayed count (e.g. ASCII: units === points) are merged.
+        // with the same displayed count are merged into one issue.
         const measures = [
             { value: units, unit: 'characters', violators: targets.filter(key => units > PLATFORMS[key].componentUnits) },
-            { value: points, unit: 'characters', violators: targets.filter(key => points > PLATFORMS[key].componentPoints) },
             { value: bytes, unit: 'bytes', violators: targets.filter(key => bytes > PLATFORMS[key].componentBytes) },
         ];
         const lengthGroups = new Map<string, { value: number; unit: string; platforms: PlatformKey[] }>();

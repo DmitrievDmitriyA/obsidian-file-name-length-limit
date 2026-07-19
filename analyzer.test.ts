@@ -47,10 +47,11 @@ describe('analyzePath — name length', () => {
         expect(platformsFor(name, ALL, NO_BUDGET, /bytes long/).sort()).toEqual(['android', 'linux']);
     });
 
-    it('counts code points on iOS: an emoji-heavy name over 255 UTF-16 units can still be valid there', () => {
-        // 130 emoji: 263 UTF-16 units (over Windows), 133 code points (fine on iOS), 523 bytes (over Linux/Android).
+    it('flags an emoji-heavy name over 255 UTF-16 units on Windows AND iOS (APFS counts units, verified empirically)', () => {
+        // 130 emoji: 263 UTF-16 units, 133 code points, 523 bytes. Real APFS rejects
+        // this name (ground-truth CI), so iOS is measured in UTF-16 units like Windows.
         const name = '🎉'.repeat(130) + '.md';
-        expect(platformsFor(name, ALL, NO_BUDGET, /characters long/)).toEqual(['windows']);
+        expect(platformsFor(name, ALL, NO_BUDGET, /characters long/).sort()).toEqual(['ios', 'windows']);
         expect(platformsFor(name, ALL, NO_BUDGET, /bytes long/).sort()).toEqual(['android', 'linux']);
     });
 });
