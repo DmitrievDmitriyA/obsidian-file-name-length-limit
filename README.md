@@ -24,7 +24,7 @@ You tell the plugin which platforms you sync to. It then applies the **strictest
 It checks each file for:
 
 - **Name length** — every folder and file name against the 255-per-name limit, measured the way each platform actually counts: UTF-16 units (Windows, iOS) and UTF-8 bytes (Linux, Android). A name with emoji or accented characters can be short in characters but too long in bytes.
-- **Full path length** — Windows caps the *absolute* path at 260 characters; the plugin accounts for where your vault lives on disk (see [Windows vault path length](#settings)).
+- **Full path length** — Windows caps the *absolute* path at 260 characters; the plugin accounts for where your vault lives on disk (see [Windows vault path length](#settings)). Note that Obsidian itself is *not* subject to this limit — long-named files look perfectly fine inside the app and only break later, in other tools (Git without `core.longpaths`, sync clients, machines without long-path support enabled). That delayed, tool-dependent breakage is exactly why the plugin warns early.
 - **Forbidden characters** — `< > : " / \ | ? *` and control characters, which Windows and Android's shared storage reject (Android also rejects the DEL character).
 - **Reserved names** — Windows refuses names like `CON`, `NUL`, `COM1`, even with an extension.
 - **Trailing dots or spaces** — silently stripped or rejected on Windows/Android.
@@ -71,7 +71,7 @@ The platform rules are not taken on faith — a CI suite **creates real edge-cas
 
 | Platform | How it's verified |
 | --- | --- |
-| **Windows** | Continuously in CI on NTFS (windows-latest) and on a physical Windows 11 machine. Win32-layer rules (reserved names, trailing dots/spaces, the 260-char path limit) are enforced above the filesystem by Explorer and most tools, and are deliberately flagged even where raw NTFS would accept. |
+| **Windows** | Continuously in CI on NTFS (windows-latest) and on a physical Windows 11 machine. Win32-layer rules (reserved names, trailing dots/spaces, the 260-char path limit) live above the filesystem: whether a given app enforces them depends on the `LongPathsEnabled` registry switch (off by default) *and* that app opting in. Obsidian itself bypasses them, and modern system tools may too — but e.g. Git fails on >260-char paths unless `core.longpaths` is set (verified empirically). The plugin deliberately flags these so vaults stay portable to any Windows machine and any tool. |
 | **Linux** | Continuously in CI on ext4 (ubuntu-latest). |
 | **iOS** | Approximated by macOS APFS in CI (same filesystem family). The 255-UTF-16-unit name limit was established *empirically* on real APFS — it contradicts some published documentation. |
 | **Android** | Not directly testable on CI runners; its shared-storage rules are taken from the Android platform source (MediaProvider) and AOSP documentation. The 255-byte name limits are covered by the Linux run. |
