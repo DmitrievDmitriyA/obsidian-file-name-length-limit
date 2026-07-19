@@ -27,6 +27,9 @@ export class FileSystemAdapter {
     }
 }
 
+/** Mutable platform flags; tests flip these and should reset them in beforeEach. */
+export const Platform = { isWin: false, isDesktop: true, isMobile: false };
+
 /** Messages shown via `new Notice(...)`, capturable by tests. */
 export const notices: string[] = [];
 
@@ -37,6 +40,11 @@ export class Notice {
 }
 
 export class App {}
+
+export class MarkdownView {
+    file: TFile | null = null;
+    containerEl = { querySelector: () => null };
+}
 
 function fakeStatusBarElement(): HTMLElement {
     const el = {
@@ -66,6 +74,7 @@ export class Plugin {
 
     addSettingTab() {}
     registerEvent() {}
+    registerDomEvent() {}
     addCommand() {}
 
     addStatusBarItem(): HTMLElement {

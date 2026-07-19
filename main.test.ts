@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import FileNameLengthLimitPlugin from './main';
-import { FileSystemAdapter, notices, TFile } from './obsidian-mock';
+import { FileSystemAdapter, notices, Platform, TFile } from './obsidian-mock';
 
 interface TestVault {
     files: TFile[];
@@ -55,6 +55,7 @@ function makePlugin(options: { files?: string[]; adapter?: unknown; stored?: unk
 
 beforeEach(() => {
     notices.length = 0;
+    Platform.isWin = false;
 });
 
 describe('loadSettings', () => {
@@ -103,6 +104,43 @@ describe('effectiveWindowsBudget', () => {
         const { plugin } = makePlugin({ adapter: {} });
         await plugin.loadSettings();
         expect(plugin.effectiveWindowsBudget()).toBe(90);
+    });
+
+    it('prefers the synced Windows-detected value on non-Windows devices', async () => {
+        // Mobile (no adapter path) with a value previously stored by a Windows device.
+        const mobile = makePlugin({ adapter: {}, stored: { detectedWindowsPathLength: 21 } });
+        await mobile.plugin.loadSettings();
+        expect(mobile.plugin.effectiveWindowsBudget()).toBe(21);
+
+        // A non-Windows desktop also prefers the real Windows value over its own path.
+        const desktop = makePlugin({
+            adapter: new FileSystemAdapter('/home/user/very/long/vault/location'),
+            stored: { detectedWindowsPathLength: 21 },
+        });
+        await desktop.plugin.loadSettings();
+        expect(desktop.plugin.effectiveWindowsBudget()).toBe(21);
+    });
+});
+
+describe('persistDetectedWindowsPathLength', () => {
+    it('stores the detected value on Windows so other devices can sync it', async () => {
+        Platform.isWin = true;
+        const base = 'C:/Base/Vault';
+        const { plugin } = makePlugin({ adapter: new FileSystemAdapter(base) });
+        await plugin.loadSettings();
+        await plugin.persistDetectedWindowsPathLength();
+        expect(plugin.settings.detectedWindowsPathLength).toBe(base.length + 1);
+
+        // Round-trips through saveData: a fresh load sees the persisted value.
+        const stored = await (plugin as unknown as { loadData(): Promise<unknown> }).loadData();
+        expect((stored as { detectedWindowsPathLength: number }).detectedWindowsPathLength).toBe(base.length + 1);
+    });
+
+    it('does nothing on non-Windows devices', async () => {
+        const { plugin } = makePlugin({ adapter: new FileSystemAdapter('/home/user/vault') });
+        await plugin.loadSettings();
+        await plugin.persistDetectedWindowsPathLength();
+        expect(plugin.settings.detectedWindowsPathLength).toBe(0);
     });
 });
 
@@ -174,6 +212,106 @@ describe('status bar', () => {
     });
 });
 
+describe('previewTitleInput', () => {
+    function fakeTitleEl(text: string) {
+        const el = {
+            textContent: text,
+            classes: new Set<string>(),
+            toggleClass(name: string, on: boolean) { on ? el.classes.add(name) : el.classes.delete(name); },
+        };
+        return el;
+    }
+
+    it('marks the title and warns once while the typed name is too long', async () => {
+        const { plugin } = makePlugin({ activeFile: 'note.md' });
+        await plugin.loadSettings();
+
+        const el = fakeTitleEl('a'.repeat(300));
+        plugin.previewTitleInput(el as unknown as HTMLElement);
+        expect(el.classes.has('fnll-title-over-limit')).toBe(true);
+        expect(notices).toHaveLength(1);
+        expect(notices[0]).toContain('shorten it');
+
+        // Still over the limit: no second notice while the first episode lasts.
+        el.textContent = 'a'.repeat(301);
+        plugin.previewTitleInput(el as unknown as HTMLElement);
+        expect(notices).toHaveLength(1);
+
+        // Back under the limit: mark cleared, next episode warns again.
+        el.textContent = 'short';
+        plugin.previewTitleInput(el as unknown as HTMLElement);
+        expect(el.classes.has('fnll-title-over-limit')).toBe(false);
+        el.textContent = 'a'.repeat(300);
+        plugin.previewTitleInput(el as unknown as HTMLElement);
+        expect(notices).toHaveLength(2);
+    });
+
+    it('live-updates the status bar with the typed length while typing', async () => {
+        // Budget 14 (see status bar tests) → strictest limit 246; 'a'*300 + '.md' = 303 chars.
+        const { plugin } = makePlugin({ activeFile: 'note.md', adapter: new FileSystemAdapter('C:/Base/Vault') });
+        await plugin.loadSettings();
+        plugin.updateStatusBarVisibility();
+        const bar = plugin.statusBarEl as unknown as { text: string; classes: Set<string> };
+
+        plugin.previewTitleInput(fakeTitleEl('a'.repeat(300)) as unknown as HTMLElement);
+        expect(bar.text).toBe('⚠ File name length: 303 / 246');
+        expect(bar.classes.has('fnll-over-limit')).toBe(true);
+
+        plugin.previewTitleInput(fakeTitleEl('ok') as unknown as HTMLElement);
+        expect(bar.text).toBe('File name length: 5 / 246');
+        expect(bar.classes.has('fnll-over-limit')).toBe(false);
+    });
+
+    it('builds the prospective path from the active file directory and extension', async () => {
+        const { plugin } = makePlugin();
+        await plugin.loadSettings();
+        expect(plugin.prospectivePath(new TFile('notes/old.md') as never, 'new name')).toBe('notes/new name.md');
+        expect(plugin.prospectivePath(new TFile('root.md') as never, 'renamed')).toBe('renamed.md');
+    });
+});
+
+describe('previewExplorerRename', () => {
+    function fakeTitleEl(text: string) {
+        const el = {
+            textContent: text,
+            classes: new Set<string>(),
+            toggleClass(name: string, on: boolean) { on ? el.classes.add(name) : el.classes.delete(name); },
+        };
+        return el;
+    }
+
+    it('flags an over-limit folder rename and clears when emptied', async () => {
+        const { plugin } = makePlugin();
+        await plugin.loadSettings();
+
+        const el = fakeTitleEl('a'.repeat(300));
+        plugin.previewExplorerRename(el as unknown as HTMLElement, 'parent/folder');
+        expect(el.classes.has('fnll-title-over-limit')).toBe(true);
+        expect(notices).toHaveLength(1);
+
+        el.textContent = '';
+        plugin.previewExplorerRename(el as unknown as HTMLElement, 'parent/folder');
+        expect(el.classes.has('fnll-title-over-limit')).toBe(false);
+    });
+
+    it('does not attach the extension twice when the rename field includes it', async () => {
+        // The renamed file is also the active one, so the status bar mirrors the
+        // prospective path — that is how we observe the computed length.
+        const { plugin, vaultState } = makePlugin({ activeFile: 'notes/pic.png' });
+        await plugin.loadSettings();
+        vaultState.created.set('notes/pic.png', new TFile('notes/pic.png'));
+        plugin.updateStatusBarVisibility();
+        const bar = plugin.statusBarEl as unknown as { text: string };
+
+        // 'notes/pica.png'.length = 14 either way.
+        plugin.previewExplorerRename(fakeTitleEl('pica.png') as unknown as HTMLElement, 'notes/pic.png');
+        const withExt = bar.text;
+        plugin.previewExplorerRename(fakeTitleEl('pica') as unknown as HTMLElement, 'notes/pic.png');
+        expect(bar.text).toBe(withExt);
+        expect(bar.text).toContain('14');
+    });
+});
+
 describe('notifyIfIncompatible', () => {
     it('shows a notice naming the affected platforms', async () => {
         const { plugin } = makePlugin();
@@ -181,6 +319,19 @@ describe('notifyIfIncompatible', () => {
         plugin.notifyIfIncompatible(new TFile('CON.md') as never);
         expect(notices).toHaveLength(1);
         expect(notices[0]).toContain('Windows');
+    });
+
+    it('announces a file once until its name changes', async () => {
+        const { plugin } = makePlugin();
+        await plugin.loadSettings();
+        const file = new TFile('CON.md') as never;
+        plugin.notifyIfIncompatible(file);
+        plugin.notifyIfIncompatible(file);
+        expect(notices).toHaveLength(1);
+
+        // A different (still bad) path is its own announcement.
+        plugin.notifyIfIncompatible(new TFile('NUL.md') as never);
+        expect(notices).toHaveLength(2);
     });
 
     it('does nothing for a null file or a compatible file', async () => {

@@ -1,4 +1,4 @@
-import { App, FileSystemAdapter, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile } from 'obsidian';
+import { App, FileSystemAdapter, MarkdownView, Notice, Platform, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile } from 'obsidian';
 import {
     analyzePath,
     buildReport,
@@ -21,6 +21,8 @@ interface FileNameLengthLimitPluginSettings {
     targets: Record<PlatformKey, boolean>;
     /** Manual override for the device root path length. 0 means auto-detect. */
     windowsPathBudgetOverride: number;
+    /** Vault path length last auto-detected on a Windows device; synced via data.json so other devices can use it. 0 = never detected. */
+    detectedWindowsPathLength: number;
     showStatusBar: boolean;
     /** 'length' shows just the current length; 'ratio' shows length / strictest limit. */
     statusBarFormat: StatusBarFormat;
@@ -29,6 +31,7 @@ interface FileNameLengthLimitPluginSettings {
 const DEFAULT_SETTINGS: FileNameLengthLimitPluginSettings = {
     targets: { windows: true, linux: true, android: true, ios: true },
     windowsPathBudgetOverride: 0,
+    detectedWindowsPathLength: 0,
     showStatusBar: true,
     statusBarFormat: 'ratio',
 };
@@ -39,23 +42,30 @@ export default class FileNameLengthLimitPlugin extends Plugin {
 
     async onload() {
         await this.loadSettings();
+        await this.persistDetectedWindowsPathLength();
 
         this.addSettingTab(new FileNameLengthLimitSettingTab(this.app, this));
         this.updateStatusBarVisibility();
+
+        this.app.workspace.onLayoutReady(() => this.updateTitleMark());
 
         this.registerEvent(
             this.app.workspace.on('file-open', (file: TFile | null) => {
                 this.notifyIfIncompatible(file);
                 this.updateStatusBar();
+                // Give the view a tick to render the new inline title first.
+                window.setTimeout(() => this.updateTitleMark(), 0);
             })
         );
 
         this.registerEvent(
-            this.app.vault.on('rename', (file: TAbstractFile) => {
-                if (file instanceof TFile && file === this.app.workspace.getActiveFile()) {
-                    this.notifyIfIncompatible(file);
-                    this.updateStatusBar();
-                }
+            this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
+                this.noticedPaths.delete(oldPath);
+                // A folder rename changes the paths of every file inside it, so
+                // re-evaluate the active file no matter what was renamed.
+                this.notifyIfIncompatible(this.app.workspace.getActiveFile());
+                this.updateStatusBar();
+                window.setTimeout(() => this.updateTitleMark(), 0);
             })
         );
 
@@ -63,6 +73,34 @@ export default class FileNameLengthLimitPlugin extends Plugin {
             id: 'check-all-file-names',
             name: 'Check all file names',
             callback: () => this.checkAllFileNames(),
+        });
+
+        // Warn while a name is being typed, before Obsidian applies the rename —
+        // especially on phones, where a rejected rename discards the typing.
+        // Covers the inline note title and the file explorer's rename field.
+        this.registerDomEvent(document, 'input', (evt: Event) => {
+            const target = evt.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            if (target.classList.contains('inline-title')) {
+                this.previewTitleInput(target);
+                return;
+            }
+            const dataPath = target.closest('.nav-file-title, .nav-folder-title')?.getAttribute('data-path');
+            if (dataPath) {
+                this.previewExplorerRename(target, dataPath);
+            }
+        });
+
+        // When a name-editing field loses focus, Obsidian applies or rejects the
+        // rename (often resetting the text without an input event). Re-sync the
+        // mark with the saved state; a following rename event re-syncs again.
+        this.registerDomEvent(document, 'focusout', (evt: Event) => {
+            const target = evt.target;
+            if (target instanceof HTMLElement && target.classList.contains('fnll-title-over-limit')) {
+                window.setTimeout(() => this.updateTitleMark(), 0);
+            }
         });
     }
 
@@ -80,10 +118,33 @@ export default class FileNameLengthLimitPlugin extends Plugin {
         return null;
     }
 
+    /**
+     * On a Windows device, remember the detected vault path length in the synced
+     * settings so phones and other devices use the real value instead of the fallback.
+     */
+    async persistDetectedWindowsPathLength() {
+        if (!Platform.isWin) {
+            return;
+        }
+        const detected = this.detectVaultPathLength();
+        if (detected !== null && detected !== this.settings.detectedWindowsPathLength) {
+            this.settings.detectedWindowsPathLength = detected;
+            await this.saveSettings();
+        }
+    }
+
     /** Characters to reserve for the part of the Windows absolute path the plugin can't see. */
     effectiveWindowsBudget(): number {
         if (this.settings.windowsPathBudgetOverride > 0) {
             return this.settings.windowsPathBudgetOverride;
+        }
+        if (Platform.isWin) {
+            return this.detectVaultPathLength() ?? FALLBACK_WINDOWS_BUDGET;
+        }
+        // Elsewhere, a value detected on a real Windows device beats this device's
+        // own path (a rough proxy at best) and the blind fallback.
+        if (this.settings.detectedWindowsPathLength > 0) {
+            return this.settings.detectedWindowsPathLength;
         }
         return this.detectVaultPathLength() ?? FALLBACK_WINDOWS_BUDGET;
     }
@@ -106,19 +167,128 @@ export default class FileNameLengthLimitPlugin extends Plugin {
         }));
     }
 
+    /** True while an over-limit notice for the typed title is already on screen. */
+    private titleWarningShown = false;
+
+    /** Paths already announced by the open-file notice; entries drop out when the file is renamed or becomes compatible. */
+    private noticedPaths = new Set<string>();
+
+    /**
+     * Drop leftover typing marks (a programmatic title reset fires no input event
+     * to clear them), then re-mark the inline title if the active file's saved
+     * name is itself incompatible.
+     */
+    private updateTitleMark() {
+        document.querySelectorAll('.fnll-title-over-limit').forEach(el => el.classList.remove('fnll-title-over-limit'));
+        this.titleWarningShown = false;
+        // Check every open markdown pane, not just the focused leaf — during an
+        // explorer rename the focused leaf is the explorer itself.
+        this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+            if (!(leaf.view instanceof MarkdownView)) {
+                return;
+            }
+            const file = leaf.view.file;
+            if (!file || this.issuesForPath(file.path).length === 0) {
+                return;
+            }
+            leaf.view.containerEl.querySelector('.inline-title')?.classList.add('fnll-title-over-limit');
+        });
+    }
+
+    /** The vault path the active file would get if its basename became `typed`. */
+    prospectivePath(file: TFile, typed: string): string {
+        const dir = file.path.slice(0, file.path.length - file.name.length);
+        const dot = file.name.lastIndexOf('.');
+        const ext = dot > 0 ? file.name.slice(dot) : '';
+        return `${dir}${typed}${ext}`;
+    }
+
+    /** Live check of the typed (not yet applied) note title; marks the title and warns once per episode. */
+    previewTitleInput(titleEl: HTMLElement) {
+        const file = this.app.workspace.getActiveFile();
+        if (!file) {
+            return;
+        }
+        const typed = (titleEl.textContent ?? '').trim();
+        if (typed.length === 0) {
+            titleEl.toggleClass('fnll-title-over-limit', false);
+            this.titleWarningShown = false;
+            this.updateStatusBar();
+            return;
+        }
+        this.markTypedName(titleEl, this.prospectivePath(file, typed), true);
+    }
+
+    /** Live check while a file or folder is being renamed in the file explorer. */
+    previewExplorerRename(renameEl: HTMLElement, dataPath: string) {
+        const updateBar = this.app.workspace.getActiveFile()?.path === dataPath;
+        const typed = (renameEl.textContent ?? '').trim();
+        if (typed.length === 0) {
+            renameEl.toggleClass('fnll-title-over-limit', false);
+            this.titleWarningShown = false;
+            if (updateBar) {
+                this.updateStatusBar();
+            }
+            return;
+        }
+        const current = this.app.vault.getAbstractFileByPath(dataPath);
+        let prospective: string;
+        if (current instanceof TFile) {
+            // The rename field may or may not include the extension; don't attach it twice.
+            const dot = current.name.lastIndexOf('.');
+            const ext = dot > 0 ? current.name.slice(dot) : '';
+            prospective = ext !== '' && typed.toLowerCase().endsWith(ext.toLowerCase())
+                ? current.path.slice(0, current.path.length - current.name.length) + typed
+                : this.prospectivePath(current, typed);
+        } else {
+            // Folder (or unknown): the typed text is the whole final component.
+            const slash = dataPath.lastIndexOf('/');
+            prospective = (slash >= 0 ? dataPath.slice(0, slash + 1) : '') + typed;
+        }
+        this.markTypedName(renameEl, prospective, updateBar);
+    }
+
+    /** Shared tail of the typing previews: mark the field, mirror the status bar, warn once per episode. */
+    private markTypedName(el: HTMLElement, prospective: string, updateBar: boolean) {
+        const issues = this.issuesForPath(prospective);
+        const over = issues.length > 0;
+        el.toggleClass('fnll-title-over-limit', over);
+        if (updateBar) {
+            this.updateStatusBar(prospective);
+        }
+        if (!over) {
+            this.titleWarningShown = false;
+            return;
+        }
+        if (!this.titleWarningShown) {
+            const platforms = new Set<PlatformKey>();
+            issues.forEach(issue => issue.platforms.forEach(p => platforms.add(p)));
+            new Notice(`This name won't work on ${labelList([...platforms])} — shorten it before confirming.`);
+            this.titleWarningShown = true;
+        }
+    }
+
     notifyIfIncompatible(file: TFile | null) {
         if (!file) {
             return;
         }
         const issues = this.issuesForPath(file.path);
-        if (issues.length > 0) {
-            const platforms = new Set<PlatformKey>();
-            issues.forEach(issue => issue.platforms.forEach(p => platforms.add(p)));
-            new Notice(
-                `"${file.name}" is not compatible with ${labelList([...platforms])} ` +
-                `(${issues.length} issue${issues.length === 1 ? '' : 's'}).`
-            );
+        if (issues.length === 0) {
+            this.noticedPaths.delete(file.path);
+            return;
         }
+        // Announce each file once until its name changes; re-opening it every time
+        // would repeat the same notice all over the vault.
+        if (this.noticedPaths.has(file.path)) {
+            return;
+        }
+        this.noticedPaths.add(file.path);
+        const platforms = new Set<PlatformKey>();
+        issues.forEach(issue => issue.platforms.forEach(p => platforms.add(p)));
+        new Notice(
+            `"${file.name}" is not compatible with ${labelList([...platforms])} ` +
+            `(${issues.length} issue${issues.length === 1 ? '' : 's'}).`
+        );
     }
 
     async checkAllFileNames() {
@@ -154,23 +324,24 @@ export default class FileNameLengthLimitPlugin extends Plugin {
         new Notice(`Report created: ${reportFile.path} (${affected.length} file(s))`);
     }
 
-    updateStatusBar() {
+    /** With `previewPath`, reflects a name still being typed instead of the saved one. */
+    updateStatusBar(previewPath?: string) {
         if (!this.settings.showStatusBar || !this.statusBarEl) {
             return;
         }
-        const file = this.app.workspace.getActiveFile();
-        if (!file) {
+        const path = previewPath ?? this.app.workspace.getActiveFile()?.path;
+        if (path === undefined) {
             this.statusBarEl.setText('File name length: 0');
             this.statusBarEl.removeClass('fnll-over-limit');
             this.statusBarEl.setAttribute('aria-label', 'No active file');
             return;
         }
-        const issues = this.issuesForPath(file.path);
+        const issues = this.issuesForPath(path);
         const overLimit = issues.length > 0;
         const limit = this.effectivePathLimit();
         const shown = this.settings.statusBarFormat === 'ratio' && limit !== null
-            ? `${file.path.length} / ${limit}`
-            : `${file.path.length}`;
+            ? `${path.length} / ${limit}`
+            : `${path.length}`;
         this.statusBarEl.setText(overLimit ? `⚠ File name length: ${shown}` : `File name length: ${shown}`);
         this.statusBarEl.toggleClass('fnll-over-limit', overLimit);
         this.statusBarEl.setAttribute(
@@ -241,15 +412,23 @@ class FileNameLengthLimitSettingTab extends PluginSettingTab {
                     }));
         }
 
+        const remembered = this.plugin.settings.detectedWindowsPathLength;
         const detected = this.plugin.detectVaultPathLength();
-        const detectedNote = detected !== null
+        const detectedNote = Platform.isWin && detected !== null
             ? `Auto-detected from this device: ${detected} characters.`
-            : `This device's vault path can't be detected (e.g. on mobile); a default of ${FALLBACK_WINDOWS_BUDGET} is used.`;
+            : remembered > 0
+                ? `Using the value detected on your Windows device: ${remembered} characters (synced with the plugin settings).`
+                : detected !== null
+                    ? `Estimated from this device's own path: ${detected} characters.`
+                    : `This device's vault path can't be detected; a default of ${FALLBACK_WINDOWS_BUDGET} is used until you open the vault on a Windows device.`;
+        const autoValue = Platform.isWin && detected !== null
+            ? detected
+            : remembered > 0 ? remembered : detected;
         new Setting(containerEl)
             .setName('Windows vault path length')
             .setDesc(`Windows caps the full absolute path at 260 characters, including your vault's location (e.g. "C:\\Users\\me\\Documents\\MyVault\\"). ${detectedNote} Leave blank to use it, or enter a value to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.`)
             .addText(text => text
-                .setPlaceholder(detected !== null ? `Auto: ${detected}` : String(FALLBACK_WINDOWS_BUDGET))
+                .setPlaceholder(autoValue !== null ? `Auto: ${autoValue}` : String(FALLBACK_WINDOWS_BUDGET))
                 .setValue(this.plugin.settings.windowsPathBudgetOverride > 0
                     ? this.plugin.settings.windowsPathBudgetOverride.toString()
                     : '')

@@ -1,5 +1,8 @@
 # File name length limit
 
+[![Version](https://img.shields.io/github/v/release/DmitrievDmitriyA/obsidian-file-name-length-limit?logo=obsidian&color=%23483699&label=version)](https://github.com/DmitrievDmitriyA/obsidian-file-name-length-limit/releases/latest)
+[![Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22file-name-length-limit%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)](https://www.obsidianstats.com/plugins/file-name-length-limit)
+
 An [Obsidian](https://obsidian.md) plugin that keeps your vault's file names compatible across every device you sync it to — **Windows, Linux, Android, and iOS**.
 
 Sync a vault between a Windows PC, a Linux server, and a phone and sooner or later a file silently fails to sync, or the whole vault refuses to copy, because a name is too long or contains a character one of those systems rejects. This plugin catches those names *before* they break your sync.
@@ -7,13 +10,14 @@ Sync a vault between a Windows PC, a Linux server, and a phone and sooner or lat
 ## Usage
 
 - **Automatic warning** — open or rename a file and, if it's incompatible with one of your selected platforms, you get a notice naming the platforms and the number of issues.
+- **Live typing warning** — while you type a note's title (or rename a file or folder in the file explorer), an incompatible name is underlined in red, the status bar mirrors the would-be length, and a notice appears right away — before the rename is applied, so nothing you typed is lost to a rejected name (which is what otherwise happens on phones).
 - **Status bar** — shows the active file's length, and turns into a highlighted `⚠` warning when the file is incompatible. Click it to run a full scan.
 - **Full report** — run the command **"Check all file names"** (from the command palette) to scan the whole vault. It writes `FileNameCompatibilityReport.md` to your vault root: files sorted by number of issues, each issue attributed to the platform(s) it affects, plus a section listing colliding names (case or Unicode normalization). Re-running overwrites the report.
 
 ## Settings
 
 - **Target platforms** — toggle Windows, Linux, Android, and iOS. The strictest combination of the selected platforms is applied.
-- **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On desktop the plugin **auto-detects** this and shows the value; leave the field blank to use it. Enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
+- **Windows vault path length** — Windows measures the full *absolute* path, which includes your vault's location (e.g. `C:\Users\me\Documents\MyVault\`). On a Windows device the plugin **auto-detects** this and remembers it in the synced plugin settings, so your phone and other synced devices use the real value too instead of a guess. Leave the field blank to use it; enter a number only to override — useful if another Windows device you sync to has a longer path. Only used when Windows is selected.
 - **Show status bar indicator** — toggle the status bar length/warning.
 - **Status bar format** — show just the current length, or the length next to the strictest path limit of your selected platforms (e.g. `104 / 246`).
 
